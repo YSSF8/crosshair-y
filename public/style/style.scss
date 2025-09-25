@@ -554,6 +554,25 @@ body {
     }
 }
 
+.settings-input {
+    background-color: var(--primary-color);
+    border: 1px solid var(--line-color);
+    border-radius: var(--default-px);
+    padding: var(--default-px);
+    transition: border-color 200ms;
+    
+    &:focus {
+        border-color: var(--accent-primary);
+        outline: none;
+    }
+}
+
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
 .icon {
     fill: var(--icon);
 }

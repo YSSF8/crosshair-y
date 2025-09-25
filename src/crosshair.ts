@@ -6,6 +6,9 @@ class CrosshairOverlay {
     public hue: number = 0;
     public rotation: number = 0;
     public opacity: number = 1;
+    public fixedPosition: boolean = false;
+    public xPosition: number = 0;
+    public yPosition: number = 0;
 
     constructor() { }
 
@@ -34,12 +37,8 @@ class CrosshairOverlay {
             this.window.loadFile('./public/crosshair.html');
 
             const { width, height } = screen.getPrimaryDisplay().size;
-            this.window.setBounds({
-                x: Math.round(width / 2 - (this.size / 2)),
-                y: Math.round(height / 2 - (this.size / 2)),
-                width: this.size,
-                height: this.size,
-            });
+
+            this.setBounds();
 
             this.window.setIgnoreMouseEvents(true);
 
@@ -66,6 +65,53 @@ class CrosshairOverlay {
             ipcMain.on('load-crosshair', event => {
                 event.reply('crosshair-loaded', imagePath);
             });
+
+            ipcMain.on('change-fixed-position', (event, fixedPosition) => {
+                this.fixedPosition = fixedPosition;
+                this.setBounds();
+            });
+
+            ipcMain.on('change-x-position', (event, xPosition) => {
+                this.xPosition = xPosition;
+                if (this.fixedPosition) {
+                    this.setBounds();
+                }
+            });
+
+            ipcMain.on('change-y-position', (event, yPosition) => {
+                this.yPosition = yPosition;
+                if (this.fixedPosition) {
+                    this.setBounds();
+                }
+            });
+
+            ipcMain.on('get-mouse-position', (event) => {
+                const { x, y } = screen.getCursorScreenPoint();
+                event.reply('mouse-position', { x, y });
+            });
+        }
+    }
+
+    setBounds() {
+        if (this.window) {
+            const { width, height } = screen.getPrimaryDisplay().size;
+            let x = this.xPosition;
+            let y = this.yPosition;
+
+            if (this.fixedPosition) {
+                x = Math.round(this.xPosition - (this.size / 2));
+                y = Math.round(this.yPosition - (this.size / 2));
+            } else {
+                x = Math.round(width / 2 - (this.size / 2));
+                y = Math.round(height / 2 - (this.size / 2));
+            }
+
+            this.window.setBounds({
+                x: x,
+                y: y,
+                width: this.size,
+                height: this.size,
+            });
         }
     }
 
@@ -79,18 +125,7 @@ class CrosshairOverlay {
 
     applySize() {
         if (this.window) {
-            const primaryDisplay = screen.getPrimaryDisplay();
-            const { x: boundsX, y: boundsY, width: boundsWidth, height: boundsHeight } = primaryDisplay.bounds;
-            const centerX = boundsX + boundsWidth / 2;
-            const centerY = boundsY + boundsHeight / 2;
-            const x = Math.round(centerX - this.size / 2);
-            const y = Math.round(centerY - this.size / 2);
-            this.window.setBounds({
-                x: x,
-                y: y,
-                width: this.size,
-                height: this.size
-            });
+            this.setBounds();
         }
     }
 

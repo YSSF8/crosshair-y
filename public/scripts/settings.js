@@ -134,6 +134,10 @@ settings.addEventListener('click', () => {
         const hueRange = frameBody.querySelector('#hue-range');
         const rotateRange = frameBody.querySelector('#rotate-range');
         const opacityRange = frameBody.querySelector('#opacity-range');
+        const fixedPositionToggle = frameBody.querySelector('#fixed-position-toggle');
+        const xPositionInput = frameBody.querySelector('#x-position-input');
+        const yPositionInput = frameBody.querySelector('#y-position-input');
+        const saveMousePositionButton = frameBody.querySelector('#save-mouse-position');
         const loadPresetSelect = frameBody.querySelector('#load-preset');
         const savePresetButton = frameBody.querySelector('#save-preset');
         const deletePresetBtn = frameBody.querySelector('#delete-preset');
@@ -172,7 +176,7 @@ settings.addEventListener('click', () => {
         if (resetButton) {
             resetButton.addEventListener('click', () => {
                 localStorage.removeItem('config');
-                config = { ...(typeof DEFAULT_CONFIG !== 'undefined' ? DEFAULT_CONFIG : { size: 40, hue: 0, rotation: 0, opacity: 1, crosshair: '' }) };
+                config = { ...(typeof DEFAULT_CONFIG !== 'undefined' ? DEFAULT_CONFIG : { size: 40, hue: 0, rotation: 0, opacity: 1, crosshair: '', fixedPosition: false, xPosition: 0, yPosition: 0 }) };
 
                 sizeRange.value = config.size;
                 hueRange.value = config.hue;
@@ -184,11 +188,21 @@ settings.addEventListener('click', () => {
                 rotateRange.title = rotateRange.value;
                 opacityRange.title = parseFloat(opacityRange.value).toFixed(1);
 
+                fixedPositionToggle.checked = config.fixedPosition;
+                xPositionInput.value = config.xPosition;
+                yPositionInput.value = config.yPosition;
+
+                xPositionInput.title = xPositionInput.value;
+                yPositionInput.title = yPositionInput.value;
+
                 ipcRenderer.send('config', config);
                 ipcRenderer.send('change-size', config.size);
                 ipcRenderer.send('change-hue', config.hue);
                 ipcRenderer.send('change-rotation', config.rotation);
                 ipcRenderer.send('change-opacity', config.opacity);
+                ipcRenderer.send('change-fixed-position', config.fixedPosition);
+                ipcRenderer.send('change-x-position', config.xPosition);
+                ipcRenderer.send('change-y-position', config.yPosition);
 
                 localStorage.removeItem('crosshairs-directory');
                 setDirectorySubText.textContent = 'No directory';
@@ -264,6 +278,51 @@ settings.addEventListener('click', () => {
             localStorage.setItem('config', JSON.stringify(config));
             ipcRenderer.send('change-opacity', opacityRange.value);
             opacityRange.title = parseFloat(opacityRange.value.toFixed(1));
+        });
+
+        fixedPositionToggle.checked = config.fixedPosition || false;
+        fixedPositionToggle.addEventListener('change', () => {
+            config.fixedPosition = fixedPositionToggle.checked;
+            localStorage.setItem('config', JSON.stringify(config));
+            ipcRenderer.send('change-fixed-position', config.fixedPosition);
+        });
+
+        xPositionInput.value = config.xPosition || 0;
+        xPositionInput.title = xPositionInput.value;
+        xPositionInput.addEventListener('change', () => {
+            const currentValue = parseInt(xPositionInput.value);
+            config.xPosition = currentValue;
+            xPositionInput.title = currentValue;
+            localStorage.setItem('config', JSON.stringify(config));
+            ipcRenderer.send('change-x-position', currentValue);
+        });
+
+        yPositionInput.value = config.yPosition || 0;
+        yPositionInput.title = yPositionInput.value;
+        yPositionInput.addEventListener('change', () => {
+            const currentValue = parseInt(yPositionInput.value);
+            config.yPosition = currentValue;
+            yPositionInput.title = currentValue;
+            localStorage.setItem('config', JSON.stringify(config));
+            ipcRenderer.send('change-y-position', currentValue);
+        });
+
+        saveMousePositionButton.addEventListener('click', () => {
+            ipcRenderer.send('get-mouse-position');
+        });
+
+        ipcRenderer.on('mouse-position', (event, { x, y }) => {
+            config.xPosition = x;
+            config.yPosition = y;
+            localStorage.setItem('config', JSON.stringify(config));
+
+            xPositionInput.value = x;
+            yPositionInput.value = y;
+            xPositionInput.title = x;
+            yPositionInput.title = y;
+
+            ipcRenderer.send('change-x-position', x);
+            ipcRenderer.send('change-y-position', y);
         });
 
         function rebuildPresetList() {

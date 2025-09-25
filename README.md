@@ -1,10 +1,12 @@
 # Crosshair Y
 
 ![License](https://img.shields.io/badge/license-MIT-green)
-![Electron](https://img.shields.io/badge/Electron-v33.2.1-blue)
+![Electron](https://img.shields.io/badge/Electron-v37.2.5-blue)
 ![Build](https://img.shields.io/badge/build-passing-brightgreen)
 
 Crosshair Y is a free and open-source alternative to Crosshair X, designed to provide customizable crosshair overlays for your games. Whether you're aiming for precision or style, Crosshair Y offers a variety of built-in crosshairs and supports custom crosshair images to enhance your gaming experience.
+
+- **MOVABLE CROSSHAIR** - This is a fork, with an option to move the crosshair position along the display.
 
 ## Table of Contents
 
