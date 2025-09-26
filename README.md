@@ -6,8 +6,6 @@
 
 Crosshair Y is a free and open-source alternative to Crosshair X, designed to provide customizable crosshair overlays for your games. Whether you're aiming for precision or style, Crosshair Y offers a variety of built-in crosshairs and supports custom crosshair images to enhance your gaming experience.
 
-- **MOVABLE CROSSHAIR** - This is a fork, with an option to move the crosshair position along the display.
-
 ## Table of Contents
 
 - [Features](#features)
@@ -22,6 +20,7 @@ Crosshair Y is a free and open-source alternative to Crosshair X, designed to pr
 - **Built-in Crosshairs**: Choose from a variety of pre-installed crosshair designs.
 - **Custom Crosshairs**: Easily add your own custom crosshair images.
 - **Adjustable Size, Hue, Rotation & Opacity**: Dial-in the perfect look and visibility. 
+- **Movable Crosshair**:  Position the crosshair anywhere on your screen. You can move it manually in the settings or use the shortcut `Ctrl + Shift + S` to instantly save it to your current cursor position. If you prefer, you can still toggle back to the classic always-centered crosshair.
 - **Presets**: Save, load, and delete crosshair configurations on the fly from the Settings panel.
 - **Cross-Platform**: Available for Windows and Linux.
 - **Lightweight & Efficient**: Minimal system resource usage ensures smooth performance.
@@ -89,6 +88,7 @@ The built applications will be located in the `build/` directory.
    - **Hue**: Modify the hue slider to change the crosshair color.
    - **Rotation**: Adjust the rotation slider to rotate the crosshair.
    - **Opacity**: Adjust the opacity slider to change the crosshair visibility level.
+   - **Move Crosshair**: Reposition the crosshair by dragging it in the settings preview or by using the `Ctrl + Shift + S` shortcut to snap it to your current cursor location. You can always revert to the locked, center-screen position from the settings menu.
 4. **Presets**: Use the “Presets” pane to save your current setup, load a previously saved one, or delete any you no longer need.
 5. **Toggling Visibility**: Use the toggle switch to show or hide the crosshair overlay.
 6. **Settings**: Access the settings window to reset configurations or manage crosshair directories.
@@ -101,6 +101,7 @@ Crosshair Y stores user configurations in the `localStorage`. You can modify set
 - **Hue**: Change the crosshair color hue via the hue range slider.
 - **Rotation**: Change the rotation level of the crosshair via the rotation range slider.
 - **Opacity**: Adjust using the opacity range slider in the settings.
+- **Move Crosshair**: Adjust the crosshair's position by entering coordinates in the settings or by using the `Ctrl + Shift + S` keyboard shortcut to save your mouse pointer's location instantly. The classic centered mode remains available as an option.
 - **Crosshair Directory**: Select a custom directory containing your crosshair `.png` files.
 
 ### Resetting to Default
