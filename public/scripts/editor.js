@@ -116,6 +116,486 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const undoManager = new UndoManager();
 
+    class LayerManager {
+        constructor(editorSVG, layersPanel) {
+            this.editorSVG = editorSVG;
+            this.layersPanel = layersPanel;
+            this.layers = [];
+            this.activeLayer = null;
+            this.nextLayerId = 1;
+            this.editingLayerId = null;
+            this.isEditing = false;
+            this.canceledEdit = false;
+
+            this.init();
+        }
+
+        init() {
+            this.addLayer('Layer 1');
+            this.setupEventListeners();
+        }
+
+        setupEventListeners() {
+            const newLayerBtn = document.getElementById('new-layer-btn');
+            const renameLayerBtn = document.getElementById('rename-layer-btn');
+            const deleteLayerBtn = document.getElementById('delete-layer-btn');
+
+            const newNewLayerBtn = newLayerBtn.cloneNode(true);
+            const newRenameLayerBtn = renameLayerBtn.cloneNode(true);
+            const newDeleteLayerBtn = deleteLayerBtn.cloneNode(true);
+
+            newLayerBtn.parentNode.replaceChild(newNewLayerBtn, newLayerBtn);
+            renameLayerBtn.parentNode.replaceChild(newRenameLayerBtn, renameLayerBtn);
+            deleteLayerBtn.parentNode.replaceChild(newDeleteLayerBtn, deleteLayerBtn);
+
+            newNewLayerBtn.addEventListener('click', () => this.addLayer());
+            newRenameLayerBtn.addEventListener('click', () => this.renameSelectedLayer());
+            newDeleteLayerBtn.addEventListener('click', () => this.deleteSelectedLayer());
+
+            document.addEventListener('keydown', this.handleGlobalKeyDown.bind(this));
+        }
+
+        handleGlobalKeyDown(e) {
+            if (this.isEditing) {
+                const allowedKeys = ['Escape', 'Enter', 'Tab', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Backspace', 'Delete'];
+                if (!allowedKeys.includes(e.key) &&
+                    !(e.ctrlKey || e.metaKey) &&
+                    e.key.length === 1) {
+                    e.stopPropagation();
+                    e.preventDefault();
+                }
+            }
+        }
+
+        addLayer(name = `Layer ${this.nextLayerId}`) {
+            const layerId = `layer-${this.nextLayerId++}`;
+
+            const layerGroup = document.createElementNS("http://www.w3.org/2000/svg", "g");
+            layerGroup.setAttribute('id', layerId);
+            layerGroup.setAttribute('data-layer', 'true');
+            layerGroup.setAttribute('data-layer-id', layerId);
+            layerGroup.setAttribute('data-layer-visible', 'true');
+            this.editorSVG.appendChild(layerGroup);
+
+            const layer = {
+                id: layerId,
+                name: name,
+                group: layerGroup,
+                visible: true,
+                locked: false,
+                elements: [],
+                selected: false
+            };
+
+            this.layers.push(layer);
+            this.renderLayers();
+            this.selectLayer(layerId);
+
+            return layer;
+        }
+
+        selectLayer(layerId) {
+            if (this.isEditing) return;
+
+            this.canceledEdit = false;
+
+            this.layers.forEach(layer => {
+                layer.selected = false;
+            });
+
+            const layerToSelect = this.layers.find(layer => layer.id === layerId);
+            if (layerToSelect) {
+                layerToSelect.selected = true;
+                this.activeLayer = layerToSelect;
+            }
+
+            this.renderLayers();
+        }
+
+        getSelectedLayer() {
+            return this.layers.find(layer => layer.selected) || this.layers[0];
+        }
+
+        renameSelectedLayer() {
+            const selectedLayer = this.getSelectedLayer();
+            if (!selectedLayer || this.isEditing) return;
+
+            this.startEditingLayer(selectedLayer.id);
+        }
+
+        startEditingLayer(layerId) {
+            if (this.canceledEdit && this.editingLayerId === layerId) {
+                this.canceledEdit = false;
+                return;
+            }
+
+            this.editingLayerId = layerId;
+            this.isEditing = true;
+            this.canceledEdit = false;
+            this.renderLayers();
+
+            setTimeout(() => {
+                const editableElement = this.layersPanel.querySelector(`[data-layer-id="${layerId}"] .layer-name-editable`);
+                if (editableElement) {
+                    editableElement.focus();
+                    this.selectAllContent(editableElement);
+                }
+            }, 10);
+        }
+
+        selectAllContent(element) {
+            const range = document.createRange();
+            range.selectNodeContents(element);
+            const selection = window.getSelection();
+            selection.removeAllRanges();
+            selection.addRange(range);
+        }
+
+        confirmRename(layerId, newName) {
+            const layer = this.layers.find(l => l.id === layerId);
+            if (layer && newName.trim()) {
+                layer.name = newName.trim();
+            }
+            this.cancelRename();
+        }
+
+        cancelRename() {
+            this.canceledEdit = true;
+            this.editingLayerId = null;
+            this.isEditing = false;
+            this.renderLayers();
+        }
+
+        deleteSelectedLayer() {
+            if (this.isEditing) return;
+
+            const selectedLayer = this.getSelectedLayer();
+            if (!selectedLayer || this.layers.length <= 1) return;
+
+            if (this.deletingLayer) return;
+            this.deletingLayer = true;
+
+            const modalContent = [
+                {
+                    element: 'div',
+                    extraClass: 'modal-header',
+                    children: [
+                        {
+                            element: 'h3',
+                            text: 'Delete Layer'
+                        }
+                    ]
+                },
+                {
+                    element: 'div',
+                    extraClass: 'modal-body',
+                    children: [
+                        {
+                            element: 'p',
+                            text: `Are you sure you want to delete layer "${selectedLayer.name}"?`
+                        }
+                    ]
+                },
+                {
+                    element: 'div',
+                    extraClass: 'modal-footer',
+                    children: [
+                        {
+                            element: 'button',
+                            extraClass: ['modal-button', 'modal-button-cancel'],
+                            text: 'Cancel',
+                            event: 'click',
+                            eventAction: () => {
+                                modal.remove();
+                                this.deletingLayer = false;
+                            }
+                        },
+                        {
+                            element: 'button',
+                            extraClass: ['modal-button', 'modal-button-danger'],
+                            text: 'Delete',
+                            event: 'click',
+                            eventAction: () => {
+                                modal.remove();
+                                this.performLayerDeletion(selectedLayer);
+                            }
+                        }
+                    ]
+                }
+            ];
+
+            const modal = new Modal(modalContent);
+
+            modal.modalBackground.addEventListener('click', (e) => {
+                if (e.target === modal.modalBackground) {
+                    modal.remove();
+                    this.deleletingLayer = false;
+                }
+            });
+        }
+
+        performLayerDeletion(layerToDelete) {
+            const layerIndex = this.layers.findIndex(layer => layer.id === layerToDelete.id);
+
+            layerToDelete.group.remove();
+
+            this.layers.splice(layerIndex, 1);
+
+            const newIndex = Math.min(layerIndex, this.layers.length - 1);
+            this.selectLayer(this.layers[newIndex].id);
+
+            this.renderLayers();
+
+            setTimeout(() => {
+                this.deletingLayer = false;
+            }, 100);
+        }
+
+        toggleLayerVisibility(layerId) {
+            if (this.isEditing) return;
+
+            const layer = this.layers.find(layer => layer.id === layerId);
+            if (layer) {
+                layer.visible = !layer.visible;
+                layer.group.style.display = layer.visible ? '' : 'none';
+                this.renderLayers();
+            }
+        }
+
+        moveLayer(layerId, direction) {
+            if (this.isEditing) return;
+
+            const layerIndex = this.layers.findIndex(layer => layer.id === layerId);
+            if (layerIndex === -1) return;
+
+            let newIndex;
+            if (direction === 'up' && layerIndex < this.layers.length - 1) {
+                newIndex = layerIndex + 1;
+            } else if (direction === 'down' && layerIndex > 0) {
+                newIndex = layerIndex - 1;
+            } else {
+                return;
+            }
+
+            [this.layers[layerIndex], this.layers[newIndex]] = [this.layers[newIndex], this.layers[layerIndex]];
+
+            this.editorSVG.innerHTML = '';
+            this.layers.forEach(layer => {
+                this.editorSVG.appendChild(layer.group);
+            });
+
+            this.renderLayers();
+        }
+
+        getLayerForElement(element) {
+            const layerGroup = element.closest('g[data-layer="true"]');
+            return layerGroup ? this.layers.find(layer => layer.group === layerGroup) : null;
+        }
+
+        addElementToActiveLayer(element) {
+            const activeLayer = this.getSelectedLayer();
+            if (activeLayer) {
+                activeLayer.group.appendChild(element);
+                activeLayer.elements.push(element);
+            } else {
+                this.editorSVG.appendChild(element);
+            }
+        }
+
+        renderLayers() {
+            this.layersPanel.innerHTML = '';
+
+            [...this.layers].reverse().forEach(layer => {
+                const layerElement = document.createElement('div');
+                layerElement.className = `layer-item ${layer.selected ? 'active' : ''} ${!layer.visible ? 'is-hidden' : ''} ${this.editingLayerId === layer.id ? 'is-editing' : ''}`;
+                layerElement.setAttribute('data-layer-id', layer.id);
+
+                const elementType = this.getLayerElementType(layer);
+
+                if (this.editingLayerId === layer.id) {
+                    layerElement.innerHTML = `
+                        <div class="layer-info">
+                            <svg class="layer-type-icon" viewBox="0 0 24 24">${this.getLayerIcon(elementType)}</svg>
+                            <span class="layer-name-editable" contenteditable="true" data-maxlength="30">${layer.name}</span>
+                            <div class="edit-controls">
+                                <button class="edit-confirm" title="Confirm">
+                                    <svg viewBox="0 0 24 24" width="16" height="16"><path fill="currentColor" d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>
+                                </button>
+                                <button class="edit-cancel" title="Cancel">
+                                    <svg viewBox="0 0 24 24" width="16" height="16"><path fill="currentColor" d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="layer-visibility-toggle" style="visibility: hidden;">
+                            <svg class="icon-visible" viewBox="0 0 24 24"><path fill="currentColor" d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"></path></svg>
+                            <svg class="icon-hidden" viewBox="0 0 24 24"><path fill="currentColor" d="M12 7c2.76 0 5 2.24 5 5 0 .65-.13 1.26-.36 1.83l2.92 2.92c1.51-1.26 2.7-2.89 3.43-4.75-1.73-4.39-6-7.5-11-7.5-1.4 0-2.74.25-3.98.7l2.16 2.16C10.74 7.13 11.35 7 12 7zM2 4.27l2.28 2.28.46.46C3.08 8.3 1.78 10.02 1 12c1.73 4.39 6 7.5 11 7.5 1.55 0 3.03-.3 4.38-.84l.42.42L19.73 22 21 20.73 3.27 3 2 4.27zM7.53 9.8l1.55 1.55c-.05.21-.08.43-.08.65 0 1.66 1.34 3 3 3 .22 0 .44-.03.65-.08l1.55 1.55c-.67.33-1.41.53-2.2.53-2.76 0-5-2.24-5-5 0-.79.2-1.53.53-2.2zm4.31-.78l3.15 3.15.02-.16c0-1.66-1.34-3-3-3l-.17.01z"></path></svg>
+                        </div>
+                    `;
+
+                    const editableElement = layerElement.querySelector('.layer-name-editable');
+                    const confirmBtn = layerElement.querySelector('.edit-confirm');
+                    const cancelBtn = layerElement.querySelector('.edit-cancel');
+
+                    const originalName = layer.name;
+
+                    editableElement.addEventListener('keydown', (e) => {
+                        if (e.key === 'Enter') {
+                            e.preventDefault();
+                            confirmBtn.click();
+                        } else if (e.key === 'Escape') {
+                            e.preventDefault();
+                            editableElement.textContent = originalName;
+                            cancelBtn.click();
+                        } else if (e.key === 'Backspace') {
+                            if (editableElement.textContent.length <= 1) {
+                                e.preventDefault();
+                            }
+                        }
+
+                        e.stopPropagation();
+                    });
+
+                    editableElement.addEventListener('paste', (e) => {
+                        e.preventDefault();
+                        const text = e.clipboardData.getData('text/plain').slice(0, 30);
+                        document.execCommand('insertText', false, text);
+                        e.stopPropagation();
+                    });
+
+                    editableElement.addEventListener('input', (e) => {
+                        if (editableElement.textContent.length > 30) {
+                            editableElement.textContent = editableElement.textContent.slice(0, 30);
+                            const selection = window.getSelection();
+                            const range = document.createRange();
+                            range.selectNodeContents(editableElement);
+                            range.collapse(false);
+                            selection.removeAllRanges();
+                            selection.addRange(range);
+                        }
+                        e.stopPropagation();
+                    });
+
+                    confirmBtn.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        this.confirmRename(layer.id, editableElement.textContent);
+                    });
+
+                    cancelBtn.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        editableElement.textContent = originalName;
+                        this.cancelRename();
+                    });
+
+                    const handleClickOutside = (e) => {
+                        if (!layerElement.contains(e.target)) {
+                            this.confirmRename(layer.id, editableElement.textContent);
+                            document.removeEventListener('click', handleClickOutside);
+                        }
+                    };
+
+                    setTimeout(() => {
+                        document.addEventListener('click', handleClickOutside);
+                    }, 100);
+
+                } else {
+                    layerElement.innerHTML = `
+                        <div class="layer-info">
+                            <svg class="layer-type-icon" viewBox="0 0 24 24">${this.getLayerIcon(elementType)}</svg>
+                            <span class="layer-name">${layer.name}</span>
+                        </div>
+                        <button class="layer-visibility-toggle" title="Toggle visibility">
+                            <svg class="icon-visible" viewBox="0 0 24 24"><path fill="currentColor" d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"></path></svg>
+                            <svg class="icon-hidden" viewBox="0 0 24 24"><path fill="currentColor" d="M12 7c2.76 0 5 2.24 5 5 0 .65-.13 1.26-.36 1.83l2.92 2.92c1.51-1.26 2.7-2.89 3.43-4.75-1.73-4.39-6-7.5-11-7.5-1.4 0-2.74.25-3.98.7l2.16 2.16C10.74 7.13 11.35 7 12 7zM2 4.27l2.28 2.28.46.46C3.08 8.3 1.78 10.02 1 12c1.73 4.39 6 7.5 11 7.5 1.55 0 3.03-.3 4.38-.84l.42.42L19.73 22 21 20.73 3.27 3 2 4.27zM7.53 9.8l1.55 1.55c-.05.21-.08.43-.08.65 0 1.66 1.34 3 3 3 .22 0 .44-.03.65-.08l1.55 1.55c-.67.33-1.41.53-2.2.53-2.76 0-5-2.24-5-5 0-.79.2-1.53.53-2.2zm4.31-.78l3.15 3.15.02-.16c0-1.66-1.34-3-3-3l-.17.01z"></path></svg>
+                        </button>
+                    `;
+
+                    layerElement.addEventListener('click', (e) => {
+                        if (!e.target.closest('.layer-visibility-toggle') && !this.isEditing && !this.canceledEdit) {
+                            this.selectLayer(layer.id);
+                        }
+                    });
+
+                    const visibilityBtn = layerElement.querySelector('.layer-visibility-toggle');
+                    visibilityBtn.addEventListener('click', (e) => {
+                        if (!this.isEditing && !this.canceledEdit) {
+                            e.stopPropagation();
+                            this.toggleLayerVisibility(layer.id);
+                        }
+                    });
+                }
+
+                if (this.editingLayerId !== layer.id && !this.isEditing && !this.canceledEdit) {
+                    layerElement.setAttribute('draggable', 'true');
+                    layerElement.addEventListener('dragstart', (e) => {
+                        e.dataTransfer.setData('text/plain', layer.id);
+                    });
+
+                    layerElement.addEventListener('dragover', (e) => {
+                        e.preventDefault();
+                        layerElement.classList.add('drag-over');
+                    });
+
+                    layerElement.addEventListener('dragleave', () => {
+                        layerElement.classList.remove('drag-over');
+                    });
+
+                    layerElement.addEventListener('drop', (e) => {
+                        e.preventDefault();
+                        layerElement.classList.remove('drag-over');
+                        const sourceLayerId = e.dataTransfer.getData('text/plain');
+                        const sourceIndex = this.layers.findIndex(l => l.id === sourceLayerId);
+                        const targetIndex = this.layers.findIndex(l => l.id === layer.id);
+
+                        if (sourceIndex !== -1 && targetIndex !== -1) {
+                            const direction = sourceIndex < targetIndex ? 'down' : 'up';
+                            this.moveLayer(sourceLayerId, direction);
+                        }
+                    });
+                }
+
+                this.layersPanel.appendChild(layerElement);
+            });
+
+            if (this.canceledEdit) {
+                setTimeout(() => {
+                    this.canceledEdit = false;
+                }, 0);
+            }
+        }
+
+        getLayerElementType(layer) {
+            const elements = layer.group.children;
+            if (elements.length === 0) return 'empty';
+
+            const types = new Set();
+            for (let element of elements) {
+                if (element.getAttribute('data-resize-wrapper') === '1') {
+                    const child = element.firstElementChild;
+                    if (child) types.add(child.tagName.toLowerCase());
+                } else {
+                    types.add(element.tagName.toLowerCase());
+                }
+            }
+
+            if (types.size === 1) return types.values().next().value;
+            return 'mixed';
+        }
+
+        getLayerIcon(type) {
+            const icons = {
+                'rect': '<path d="M3 5v14h18V5H3zm16 12H5V7h14v10z" fill="currentColor"/>',
+                'ellipse': '<path d="M12 2C6.47 2 2 6.47 2 12s4.47 10 10 10 10-4.47 10-10S17.53 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z" fill="currentColor"/>',
+                'circle': '<path d="M12 2C6.47 2 2 6.47 2 12s4.47 10 10 10 10-4.47 10-10S17.53 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z" fill="currentColor"/>',
+                'path': '<path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" fill="currentColor"/>',
+                'line': '<path d="M3.5 18.49l6-6.01 4 4L22 6.92l-1.41-1.41-7.09 7.97-4-4L2 16.99z" fill="currentColor"/>',
+                'empty': '<path d="M19 5v14H5V5h14m0-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2z" fill="currentColor"/>',
+                'mixed': '<path d="M4 6h16v2H4zm0 4h16v2H4zm0 4h16v2H4zm0 4h16v2H4z" fill="currentColor"/>'
+            };
+
+            return icons[type] || icons['empty'];
+        }
+    }
+
     function init() {
         setupToolbox();
         setupCanvasListeners();
@@ -123,6 +603,9 @@ document.addEventListener('DOMContentLoaded', () => {
         ipcRenderer.on('load-file', (event, filePath) => loadSVG(filePath));
         setBaseViewBoxFromEditor();
         setupZoomControls();
+
+        state.layerManager = new LayerManager(editorSVG, document.getElementById('layers-panel'));
+
         undoManager.recordState();
     }
 
@@ -145,13 +628,23 @@ document.addEventListener('DOMContentLoaded', () => {
             overlaySVG.setAttribute('viewBox', editorSVG.getAttribute('viewBox'));
             overlaySVG.setAttribute('preserveAspectRatio', editorSVG.getAttribute('preserveAspectRatio') || 'xMinYMin meet');
             overlaySVG.style.cssText = `
-                position: absolute;
-                top: 0;
-                left: 0;
-                width: 100%;
-                height: 100%;
-                pointer-events: none;
-            `;
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        `;
+
+            state.layerManager = new LayerManager(editorSVG, document.getElementById('layers-panel'));
+
+            const elements = Array.from(editorSVG.children).filter(child =>
+                !child.hasAttribute('data-layer') && child.tagName !== 'defs'
+            );
+
+            elements.forEach(element => {
+                state.layerManager.layers[0].group.appendChild(element);
+            });
 
             extractAndBuildPalette();
             deselectElement();
@@ -1343,19 +1836,34 @@ document.addEventListener('DOMContentLoaded', () => {
             shape.setAttribute('stroke-linejoin', 'round');
         }
 
-        editorSVG.appendChild(shape);
+        state.layerManager.addElementToActiveLayer(shape);
+
         state.currentPath = shape;
         return shape;
     }
 
-    function startDrawingRect(pt) { createShape('rect'); }
-    function startDrawingEllipse(pt) { createShape('ellipse'); }
+    function startDrawingRect(pt) {
+        const shape = createShape('rect');
+        shape.setAttribute('x', pt.x);
+        shape.setAttribute('y', pt.y);
+        shape.setAttribute('width', 0);
+        shape.setAttribute('height', 0);
+    }
+
+    function startDrawingEllipse(pt) {
+        const shape = createShape('ellipse');
+        shape.setAttribute('cx', pt.x);
+        shape.setAttribute('cy', pt.y);
+        shape.setAttribute('rx', 0);
+        shape.setAttribute('ry', 0);
+    }
+
     function startDrawingLine(pt) {
-        createShape('line');
-        state.currentPath.setAttribute('x1', pt.x);
-        state.currentPath.setAttribute('y1', pt.y);
-        state.currentPath.setAttribute('x2', pt.x);
-        state.currentPath.setAttribute('y2', pt.y);
+        const shape = createShape('line');
+        shape.setAttribute('x1', pt.x);
+        shape.setAttribute('y1', pt.y);
+        shape.setAttribute('x2', pt.x);
+        shape.setAttribute('y2', pt.y);
     }
 
     function updateDrawing(pt) {
