@@ -2,6 +2,8 @@ import { app, BrowserWindow, Menu, dialog, ipcMain } from 'electron';
 import * as fs from 'fs';
 import * as path from 'path';
 
+let globalClipboardHasContent = false;
+
 function createEditorWindow(filePath: string) {
     const editorWindow = new BrowserWindow({
         width: 800,
@@ -21,6 +23,11 @@ function createEditorWindow(filePath: string) {
         if (filePath) {
             editorWindow.webContents.send('load-file', filePath);
         }
+    });
+
+    ipcMain.on('clipboard-state-changed', (event, hasContent: boolean) => {
+        globalClipboardHasContent = hasContent;
+        updateAppMenu();
     });
 
     buildAppMenu();
@@ -71,10 +78,32 @@ function buildAppMenu() {
                 },
                 { type: 'separator' },
                 {
+                    label: 'Cut',
+                    accelerator: 'CmdOrCtrl+X',
+                    click: () => { sendToFocusedWindow('menu-cut'); }
+                },
+                {
+                    label: 'Copy',
+                    accelerator: 'CmdOrCtrl+C',
+                    click: () => { sendToFocusedWindow('menu-copy'); }
+                },
+                {
+                    label: 'Paste',
+                    accelerator: 'CmdOrCtrl+V',
+                    enabled: globalClipboardHasContent,
+                    click: () => {
+                        if (globalClipboardHasContent) {
+                            sendToFocusedWindow('menu-paste');
+                        }
+                    }
+                },
+                { type: 'separator' },
+                {
                     label: 'Delete',
                     accelerator: 'Delete',
                     click: () => { sendToFocusedWindow('menu-delete'); }
                 },
+                { type: 'separator' },
                 {
                     label: 'Bring to front',
                     click: () => { sendToFocusedWindow('menu-bring-to-front'); }
@@ -104,6 +133,12 @@ function buildAppMenu() {
 
     const menu = Menu.buildFromTemplate(template);
     Menu.setApplicationMenu(menu);
+
+    console.log('App menu built, Paste enabled:', globalClipboardHasContent);
+}
+
+function updateAppMenu() {
+    buildAppMenu();
 }
 
 function sendToFocusedWindow(channel: string, ...args: any[]) {

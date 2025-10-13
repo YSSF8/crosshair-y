@@ -807,6 +807,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 deselectElement();
                 extractAndBuildPalette();
             };
+        }
+
+        if (element) {
             menuItems['Bring to front'] = () => {
                 undoManager.recordState();
                 editorSVG.appendChild(element);
@@ -817,39 +820,57 @@ document.addEventListener('DOMContentLoaded', () => {
             };
         }
 
-        state.activeContextMenu = new ContextMenu(element || editorSVG, menuItems);
+        if (Object.keys(menuItems).length > 0) {
+            state.activeContextMenu = new ContextMenu(element || editorSVG, menuItems);
+        }
+    }
+
+    function notifyClipboardState() {
+        const hasContent = state.clipboard.element !== null;
+        console.log('Clipboard state changed:', hasContent);
+        ipcRenderer.send('clipboard-state-changed', hasContent);
     }
 
     function copyElement(element) {
         undoManager.recordState();
 
-        const clonedElement = element.cloneNode(true);
+        try {
+            const clonedElement = element.cloneNode(true);
 
-        state.clipboard = {
-            element: clonedElement,
-            type: 'copy',
-            offset: { x: 10, y: 10 }
-        };
+            state.clipboard = {
+                element: clonedElement,
+                type: 'copy',
+                offset: { x: 10, y: 10 }
+            };
 
-        console.log('Element copied to clipboard');
+            console.log('Element copied to clipboard');
+            notifyClipboardState();
+        } catch (error) {
+            console.error('Error copying element:', error);
+        }
     }
 
     function cutElement(element) {
         undoManager.recordState();
 
-        const clonedElement = element.cloneNode(true);
+        try {
+            const clonedElement = element.cloneNode(true);
 
-        state.clipboard = {
-            element: clonedElement,
-            type: 'cut',
-            offset: { x: 10, y: 10 }
-        };
+            state.clipboard = {
+                element: clonedElement,
+                type: 'cut',
+                offset: { x: 10, y: 10 }
+            };
 
-        element.remove();
-        deselectElement();
-        extractAndBuildPalette();
+            element.remove();
+            deselectElement();
+            extractAndBuildPalette();
 
-        console.log('Element cut to clipboard');
+            console.log('Element cut to clipboard');
+            notifyClipboardState();
+        } catch (error) {
+            console.error('Error cutting element:', error);
+        }
     }
 
     function pasteElement() {
@@ -904,8 +925,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
         } catch (error) {
             console.error('Error pasting element:', error);
+        } finally {
+            notifyClipboardState();
         }
     }
+
+    notifyClipboardState();
 
     document.addEventListener('keydown', e => {
         if (e.code === 'Space' && !state.isSpacePressed) {
@@ -1475,6 +1500,19 @@ document.addEventListener('DOMContentLoaded', () => {
             deselectElement();
             extractAndBuildPalette();
         }
+    });
+    ipcRenderer.on('menu-copy', () => {
+        if (state.selectedElement) {
+            copyElement(state.selectedElement);
+        }
+    });
+    ipcRenderer.on('menu-cut', () => {
+        if (state.selectedElement) {
+            cutElement(state.selectedElement);
+        }
+    });
+    ipcRenderer.on('menu-paste', () => {
+        pasteElement();
     });
     ipcRenderer.on('menu-bring-to-front', () => {
         if (state.selectedElement) {
