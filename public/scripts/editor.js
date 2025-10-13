@@ -30,6 +30,7 @@ document.addEventListener('DOMContentLoaded', () => {
         },
         currentPath: null,
         pathStep: 0,
+        curvePoints: { p1: null, p2: null },
         selectionBox: null,
         filePath: null,
         zoom: 1,
@@ -256,8 +257,11 @@ document.addEventListener('DOMContentLoaded', () => {
     function setupToolbox() {
         toolButtons.forEach(button => {
             button.addEventListener('click', () => {
-                if (state.currentPath) {
-                    finalizeElement();
+                if (state.currentTool === 'path' && state.pathStep > 0) {
+                    if (state.currentPath) {
+                        state.currentPath.remove();
+                    }
+                    resetPathState();
                 }
 
                 toolButtons.forEach(btn => btn.classList.remove('active'));
@@ -265,10 +269,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 state.currentTool = button.dataset.tool;
 
                 deselectElement();
-
-                state.pathStep = 0;
             });
         });
+    }
+
+    function resetPathState() {
+        state.pathStep = 0;
+        state.curvePoints = { p1: null, p2: null };
+        state.currentPath = null;
     }
 
     function getTargetElement(wrapperOrEl) {
@@ -782,6 +790,13 @@ document.addEventListener('DOMContentLoaded', () => {
             deselectElement();
             extractAndBuildPalette();
         }
+        
+        if (e.key === 'Escape' && state.currentTool === 'path' && state.pathStep > 0) {
+            if (state.currentPath) {
+                state.currentPath.remove();
+            }
+            resetPathState();
+        }
     });
 
     function setupCanvasListeners() {
@@ -825,14 +840,51 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
+        if (state.currentTool === 'path') {
+            handlePathClick(pt);
+            return;
+        }
+
         state.isDrawing = true;
         const toolActions = {
             rect: startDrawingRect,
             ellipse: startDrawingEllipse,
             line: startDrawingLine,
-            path: handlePathDrawing,
         };
         toolActions[state.currentTool]?.(pt);
+    }
+
+    function handlePathClick(pt) {
+        if (state.pathStep === 0) {
+            createCurvePath();
+            state.curvePoints.p1 = pt;
+            state.pathStep = 1;
+            
+            const marker = document.createElementNS(SVG_NS, 'circle');
+            marker.setAttribute('cx', pt.x);
+            marker.setAttribute('cy', pt.y);
+            marker.setAttribute('r', 3);
+            marker.setAttribute('fill', 'red');
+            marker.setAttribute('class', 'temp-marker');
+            overlaySVG.appendChild(marker);
+            
+        } else if (state.pathStep === 1) {
+            state.curvePoints.p2 = pt;
+            state.pathStep = 2;
+            
+            const marker = document.createElementNS(SVG_NS, 'circle');
+            marker.setAttribute('cx', pt.x);
+            marker.setAttribute('cy', pt.y);
+            marker.setAttribute('r', 3);
+            marker.setAttribute('fill', 'blue');
+            marker.setAttribute('class', 'temp-marker');
+            overlaySVG.appendChild(marker);
+            
+            updateCurvePath(pt);
+            
+        } else if (state.pathStep === 2) {
+            finalizeCurve();
+        }
     }
 
     function onMouseMove(e) {
@@ -855,13 +907,16 @@ document.addEventListener('DOMContentLoaded', () => {
             updateSelectionOverlay();
         }
 
-        if (!state.isDrawing) return;
+        if (state.currentTool === 'path' && state.pathStep === 2) {
+            updateCurvePath(pt);
+        }
+
+        if (!state.isDrawing || state.currentTool === 'path') return;
 
         const toolActions = {
             rect: updateDrawing,
             ellipse: updateDrawing,
             line: updateDrawing,
-            path: updatePath,
         };
         toolActions[state.currentTool]?.(pt);
     }
@@ -871,7 +926,7 @@ document.addEventListener('DOMContentLoaded', () => {
             state.isDragging = false;
         }
 
-        if (state.isDrawing) {
+        if (state.isDrawing && state.currentTool !== 'path') {
             state.isDrawing = false;
             finalizeElement();
         }
@@ -879,16 +934,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function finalizeElement() {
         if (!state.currentPath) return;
-
-        if (state.currentPath.tagName.toLowerCase() === 'path') {
-            const d = state.currentPath.getAttribute('d') || '';
-            if (!/[QqLlCcSsTtAaZz]/.test(d)) {
-                state.currentPath.remove();
-                state.currentPath = null;
-                state.pathStep = 0;
-                return;
-            }
-        }
 
         undoManager.recordState();
 
@@ -899,7 +944,51 @@ document.addEventListener('DOMContentLoaded', () => {
         extractAndBuildPalette();
 
         state.currentPath = null;
-        state.pathStep = 0;
+    }
+
+    function createCurvePath() {
+        const path = document.createElementNS(SVG_NS, 'path');
+        path.setAttribute('fill', 'none');
+        path.setAttribute('stroke', propStroke.value);
+        path.setAttribute('stroke-width', propStrokeWidth.value);
+        path.setAttribute('stroke-linecap', 'round');
+        path.setAttribute('stroke-linejoin', 'round');
+        
+        editorSVG.appendChild(path);
+        state.currentPath = path;
+    }
+
+    function updateCurvePath(currentPt) {
+        if (!state.currentPath || !state.curvePoints.p1 || !state.curvePoints.p2) return;
+
+        const { p1, p2 } = state.curvePoints;
+        
+        const midX = (p1.x + p2.x) / 2;
+        const midY = (p1.y + p2.y) / 2;
+        
+        const dirX = currentPt.x - midX;
+        const dirY = currentPt.y - midY;
+        
+        const controlX = midX - dirX;
+        const controlY = midY - dirY;
+        
+        const d = `M ${p1.x} ${p1.y} Q ${controlX} ${controlY} ${p2.x} ${p2.y}`;
+        state.currentPath.setAttribute('d', d);
+    }
+
+    function finalizeCurve() {
+        if (!state.currentPath) return;
+
+        undoManager.recordState();
+
+        const markers = overlaySVG.querySelectorAll('.temp-marker');
+        markers.forEach(marker => marker.remove());
+
+        selectElement(state.currentPath);
+        setupContextMenu(state.currentPath);
+        extractAndBuildPalette();
+
+        resetPathState();
     }
 
     function createShape(type) {
@@ -1046,27 +1135,6 @@ document.addEventListener('DOMContentLoaded', () => {
             const pt = getSVGPoint(editorSVG, ev.clientX, ev.clientY);
             applyZoom(newScale, pt);
         }, { passive: false });
-    }
-
-    function handlePathDrawing(pt) {
-        if (state.pathStep === 0) {
-            createShape('path');
-            state.currentPath.setAttribute('d', `M ${pt.x} ${pt.y}`);
-            state.pathStep = 1;
-        }
-    }
-
-    function updatePath(pt) {
-        if (!state.currentPath || state.pathStep !== 1) return;
-        const { x, y } = state.startPoint;
-        const midX = (x + pt.x) / 2;
-        const midY = (y + pt.y) / 2;
-        const dx = pt.x - x;
-        const dy = pt.y - y;
-        const controlX = midX - dy * 0.4;
-        const controlY = midY + dx * 0.4;
-
-        state.currentPath.setAttribute('d', `M ${x} ${y} Q ${controlX} ${controlY} ${pt.x} ${pt.y}`);
     }
 
     function serializeEditorSVG() {
