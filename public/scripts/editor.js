@@ -34,6 +34,11 @@ document.addEventListener('DOMContentLoaded', () => {
             startViewBox: null,
             startMouse: null
         },
+        clipboard: {
+            element: null,
+            type: null,
+            offset: { x: 10, y: 10 }
+        },
         currentPath: null,
         pathStep: 0,
         curvePoints: { p1: null, p2: null },
@@ -537,10 +542,10 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function ensureWrapper(el) {
+        if (el.tagName === 'g' && el.dataset.resizeWrapper === '1') return el;
+
         const existing = el.closest && el.closest('g[data-resize-wrapper="1"]');
         if (existing) return existing;
-
-        if (el.tagName === 'g' && el.dataset.resizeWrapper === '1') return el;
 
         const g = document.createElementNS(SVG_NS, 'g');
         g.dataset.resizeWrapper = '1';
@@ -777,25 +782,163 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function setupContextMenu(element) {
         if (state.activeContextMenu) state.activeContextMenu.destroy();
-        state.activeContextMenu = new ContextMenu(element, {
-            'Delete': () => {
+
+        const menuItems = {};
+
+        if (element) {
+            menuItems['Copy'] = () => {
+                copyElement(element);
+            };
+            menuItems['Cut'] = () => {
+                cutElement(element);
+            };
+        }
+
+        if (state.clipboard.element) {
+            menuItems['Paste'] = () => {
+                pasteElement();
+            };
+        }
+
+        if (element) {
+            menuItems['Delete'] = () => {
                 undoManager.recordState();
                 element.remove();
                 deselectElement();
                 extractAndBuildPalette();
-            },
-            'Bring to front': () => {
+            };
+            menuItems['Bring to front'] = () => {
                 undoManager.recordState();
                 editorSVG.appendChild(element);
-            },
-            'Send to back': () => {
+            };
+            menuItems['Send to back'] = () => {
                 undoManager.recordState();
                 editorSVG.insertBefore(element, editorSVG.firstChild);
-            },
-        });
+            };
+        }
+
+        state.activeContextMenu = new ContextMenu(element || editorSVG, menuItems);
+    }
+
+    function copyElement(element) {
+        undoManager.recordState();
+
+        const clonedElement = element.cloneNode(true);
+
+        state.clipboard = {
+            element: clonedElement,
+            type: 'copy',
+            offset: { x: 10, y: 10 }
+        };
+
+        console.log('Element copied to clipboard');
+    }
+
+    function cutElement(element) {
+        undoManager.recordState();
+
+        const clonedElement = element.cloneNode(true);
+
+        state.clipboard = {
+            element: clonedElement,
+            type: 'cut',
+            offset: { x: 10, y: 10 }
+        };
+
+        element.remove();
+        deselectElement();
+        extractAndBuildPalette();
+
+        console.log('Element cut to clipboard');
+    }
+
+    function pasteElement() {
+        if (!state.clipboard.element) {
+            console.log('Clipboard is empty');
+            return;
+        }
+
+        undoManager.recordState();
+
+        try {
+            const pastedElement = state.clipboard.element.cloneNode(true);
+
+            const existingWrappers = pastedElement.querySelectorAll ?
+                pastedElement.querySelectorAll('g[data-resize-wrapper="1"]') : [];
+            existingWrappers.forEach(wrapper => {
+                const child = wrapper.firstElementChild;
+                if (child) {
+                    const wrapperTransform = wrapper.getAttribute('transform');
+                    if (wrapperTransform) {
+                        child.setAttribute('transform', wrapperTransform);
+                    }
+                    wrapper.parentNode.replaceChild(child, wrapper);
+                }
+            });
+
+            let transform = { tx: state.clipboard.offset.x, ty: state.clipboard.offset.y, sx: 1, sy: 1 };
+
+            const existingTransform = getTransformComponents(pastedElement);
+            if (existingTransform.tx !== 0 || existingTransform.ty !== 0) {
+                transform.tx += existingTransform.tx;
+                transform.ty += existingTransform.ty;
+            }
+
+            setTransform(pastedElement, transform);
+
+            editorSVG.appendChild(pastedElement);
+
+            if (state.clipboard.type === 'cut') {
+                state.clipboard.element = null;
+                state.clipboard.type = null;
+            } else {
+                state.clipboard.offset.x += 10;
+                state.clipboard.offset.y += 10;
+            }
+
+            const wrappedElement = ensureWrapper(pastedElement);
+            selectElement(wrappedElement);
+            extractAndBuildPalette();
+
+            console.log('Element pasted successfully');
+
+        } catch (error) {
+            console.error('Error pasting element:', error);
+        }
     }
 
     document.addEventListener('keydown', e => {
+        if (e.code === 'Space' && !state.isSpacePressed) {
+            state.isSpacePressed = true;
+            updateCursorStyle();
+
+            if (canvasContainer.contains(document.activeElement) ||
+                document.activeElement === canvasContainer) {
+                e.preventDefault();
+            }
+            return;
+        }
+
+        if (e.ctrlKey || e.metaKey) {
+            if (e.key === 'c' && state.selectedElement) {
+                e.preventDefault();
+                copyElement(state.selectedElement);
+                return;
+            }
+            if (e.key === 'x' && state.selectedElement) {
+                e.preventDefault();
+                cutElement(state.selectedElement);
+                return;
+            }
+            if (e.key === 'v') {
+                e.preventDefault();
+                pasteElement();
+                return;
+            }
+        }
+
+        if (state.isSpacePressed) return;
+
         if (e.key === 'Delete' && state.selectedElement) {
             undoManager.recordState();
             state.selectedElement.remove();
