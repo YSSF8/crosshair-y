@@ -713,11 +713,30 @@ document.addEventListener('DOMContentLoaded', () => {
                 target.setAttribute('y2', y + h);
                 break;
             case 'circle':
-                const diameter = Math.min(w, h);
-                const radius = diameter / 2;
-                target.setAttribute('cx', x + radius);
-                target.setAttribute('cy', y + radius);
-                target.setAttribute('r', radius);
+                const ellipse = document.createElementNS(SVG_NS, 'ellipse');
+
+                for (let attr of target.attributes) {
+                    ellipse.setAttribute(attr.name, attr.value);
+                }
+
+                ellipse.setAttribute('cx', x + w / 2);
+                ellipse.setAttribute('cy', y + h / 2);
+                ellipse.setAttribute('rx', w / 2);
+                ellipse.setAttribute('ry', h / 2);
+
+                ellipse.removeAttribute('r');
+
+                target.parentNode.replaceChild(ellipse, target);
+
+                if (state.selectedElement && state.selectedElement.contains(target)) {
+                    const wrapper = state.selectedElement;
+                    if (wrapper.tagName.toLowerCase() === 'g' && wrapper.dataset.resizeWrapper === '1') {
+                        wrapper.removeChild(target);
+                        wrapper.appendChild(ellipse);
+                    } else {
+                        state.selectedElement = ellipse;
+                    }
+                }
                 break;
         }
 
