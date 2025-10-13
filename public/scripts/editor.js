@@ -264,6 +264,12 @@ document.addEventListener('DOMContentLoaded', () => {
                     resetPathState();
                 }
 
+                if (state.isDrawing && state.currentPath) {
+                    state.currentPath.remove();
+                    state.currentPath = null;
+                    state.isDrawing = false;
+                }
+
                 toolButtons.forEach(btn => btn.classList.remove('active'));
                 button.classList.add('active');
                 state.currentTool = button.dataset.tool;
@@ -1017,20 +1023,18 @@ document.addEventListener('DOMContentLoaded', () => {
     function createShape(type) {
         const shape = document.createElementNS(SVG_NS, type);
 
+        shape.setAttribute('fill', type === 'path' ? 'none' : propFill.value);
+        shape.setAttribute('stroke', propStroke.value);
+        shape.setAttribute('stroke-width', propStrokeWidth.value);
+
         if (type === 'path') {
-            shape.setAttribute('fill', 'none');
-            shape.setAttribute('stroke', propStroke.value);
-            shape.setAttribute('stroke-width', propStrokeWidth.value);
             shape.setAttribute('stroke-linecap', 'round');
             shape.setAttribute('stroke-linejoin', 'round');
-        } else {
-            shape.setAttribute('fill', propFill.value);
-            shape.setAttribute('stroke', propStroke.value);
-            shape.setAttribute('stroke-width', propStrokeWidth.value);
         }
 
         editorSVG.appendChild(shape);
         state.currentPath = shape;
+        return shape;
     }
 
     function startDrawingRect(pt) { createShape('rect'); }
@@ -1039,6 +1043,8 @@ document.addEventListener('DOMContentLoaded', () => {
         createShape('line');
         state.currentPath.setAttribute('x1', pt.x);
         state.currentPath.setAttribute('y1', pt.y);
+        state.currentPath.setAttribute('x2', pt.x);
+        state.currentPath.setAttribute('y2', pt.y);
     }
 
     function updateDrawing(pt) {
