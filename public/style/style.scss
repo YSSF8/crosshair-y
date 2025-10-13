@@ -11,6 +11,9 @@
     --icon: #f0f0f0;
     --primary-opposite: #e0e0e0;
 
+    --primary-color-translucent: rgba(24, 24, 24, 0.6);
+    --secondary-color-translucent: rgba(37, 37, 37, 0.6);
+
     --accent-primary: #0057b7;
     --accent-primary-dark: #05203f;
     --accent-secondary: #ff7eb6;
@@ -278,7 +281,8 @@ body {
     align-items: center;
     justify-content: center;
     padding: calc(var(--default-px) / 2);
-    background-color: var(--primary-color);
+    background-color: var(--primary-color-translucent);
+    backdrop-filter: blur(10px);
     position: fixed;
     width: calc(100% - var(--default-px) * 4 - 2px);
     border: 1px solid var(--line-color);
@@ -313,7 +317,7 @@ body {
         width: 100%;
         border: 1px solid var(--line-color);
         border-radius: 999px;
-        background-color: var(--secondary-color);
+        background-color: var(--secondary-color-translucent);
         color: var(--icon);
         font-size: 14px;
         box-sizing: border-box;
