@@ -23,10 +23,16 @@ document.addEventListener('DOMContentLoaded', () => {
         activeContextMenu: null,
         isDrawing: false,
         isDragging: false,
+        isPanning: false,
+        isSpacePressed: false,
         startPoint: { x: 0, y: 0 },
         dragContext: {
             initialTx: 0,
             initialTy: 0,
+        },
+        panContext: {
+            startViewBox: null,
+            startMouse: null
         },
         currentPath: null,
         pathStep: 0,
@@ -790,7 +796,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     document.addEventListener('keydown', e => {
-        // Existing shortcuts
         if (e.key === 'Delete' && state.selectedElement) {
             undoManager.recordState();
             state.selectedElement.remove();
@@ -837,6 +842,67 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (state.currentTool === 'select') deselectElement();
             }
         });
+
+        document.addEventListener('keydown', handleKeyDown);
+        document.addEventListener('keyup', handleKeyUp);
+
+        canvasContainer.addEventListener('mouseenter', updateCursorStyle);
+        canvasContainer.addEventListener('mousemove', updateCursorStyle);
+        canvasContainer.addEventListener('mouseleave', resetCursorStyle);
+    }
+
+    function handleKeyDown(e) {
+        if (e.code === 'Space' && !state.isSpacePressed) {
+            state.isSpacePressed = true;
+            updateCursorStyle();
+
+            if (canvasContainer.contains(e.target) || e.target === canvasContainer) {
+                e.preventDefault();
+            }
+        }
+    }
+
+    function handleKeyUp(e) {
+        if (e.code === 'Space' && state.isSpacePressed) {
+            state.isSpacePressed = false;
+            if (!state.isPanning) {
+                updateCursorStyle();
+            }
+        }
+    }
+
+    function updateCursorStyle() {
+        if (state.isPanning) {
+            canvasContainer.style.cursor = 'grabbing';
+        } else if (state.isSpacePressed && isMouseOverCanvas()) {
+            canvasContainer.style.cursor = 'grab';
+        } else {
+            resetCursorStyle();
+        }
+    }
+
+    function resetCursorStyle() {
+        if (state.isPanning || (state.isSpacePressed && isMouseOverCanvas())) {
+            return;
+        }
+
+        switch (state.currentTool) {
+            case 'select':
+                canvasContainer.style.cursor = 'default';
+                break;
+            case 'rect':
+            case 'ellipse':
+            case 'line':
+            case 'path':
+                canvasContainer.style.cursor = 'crosshair';
+                break;
+            default:
+                canvasContainer.style.cursor = 'default';
+        }
+    }
+
+    function isMouseOverCanvas() {
+        return true;
     }
 
     function onMouseDown(e) {
@@ -849,6 +915,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const pt = getSVGPoint(editorSVG, e.clientX, e.clientY);
         state.startPoint = pt;
+
+        if (state.isSpacePressed && !state.isDrawing && !state.isDragging) {
+            startPanning(e);
+            return;
+        }
 
         if (state.currentTool === 'select') {
             const rawTarget = e.target.closest ? e.target.closest('path, rect, circle, ellipse, line, text, g') : null;
@@ -919,6 +990,13 @@ document.addEventListener('DOMContentLoaded', () => {
     function onMouseMove(e) {
         const pt = getSVGPoint(editorSVG, e.clientX, e.clientY);
 
+        if (state.isPanning) {
+            handlePanning(e);
+            return;
+        }
+
+        updateCursorStyle();
+
         if (state.isDragging && state.selectedElement) {
             const dx = pt.x - state.dragContext.startPoint.x;
             const dy = pt.y - state.dragContext.startPoint.y;
@@ -951,6 +1029,10 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function onMouseUp(e) {
+        if (state.isPanning) {
+            stopPanning();
+        }
+
         if (state.isDragging) {
             state.isDragging = false;
         }
@@ -958,6 +1040,51 @@ document.addEventListener('DOMContentLoaded', () => {
         if (state.isDrawing && state.currentTool !== 'path') {
             state.isDrawing = false;
             finalizeElement();
+        }
+
+        updateCursorStyle();
+    }
+
+    function startPanning(e) {
+        state.isPanning = true;
+        state.panContext = {
+            startViewBox: parseViewBox(editorSVG),
+            startMouse: { x: e.clientX, y: e.clientY }
+        };
+
+        canvasContainer.style.cursor = 'grabbing';
+        e.preventDefault();
+    }
+
+    function handlePanning(e) {
+        if (!state.isPanning || !state.panContext.startViewBox) return;
+
+        const { startViewBox, startMouse } = state.panContext;
+        const dx = (startMouse.x - e.clientX) * (startViewBox.w / canvasContainer.clientWidth);
+        const dy = (startMouse.y - e.clientY) * (startViewBox.h / canvasContainer.clientHeight);
+
+        const newX = startViewBox.x + dx;
+        const newY = startViewBox.y + dy;
+
+        editorSVG.setAttribute('viewBox', `${newX} ${newY} ${startViewBox.w} ${startViewBox.h}`);
+        if (overlaySVG) {
+            overlaySVG.setAttribute('viewBox', `${newX} ${newY} ${startViewBox.w} ${startViewBox.h}`);
+        }
+
+        updateSelectionOverlay();
+    }
+
+    function stopPanning() {
+        state.isPanning = false;
+        state.panContext = {
+            startViewBox: null,
+            startMouse: null
+        };
+
+        if (state.isSpacePressed) {
+            canvasContainer.style.cursor = 'grab';
+        } else {
+            resetCursorStyle();
         }
     }
 
