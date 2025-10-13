@@ -1056,7 +1056,7 @@ input[type="number"]::-webkit-inner-spin-button {
     flex-direction: column;
     gap: 16px;
     padding: 24px;
-    padding-bottom: 18px !important;
+    padding-bottom: 18px;
     min-width: 300px;
     max-width: 400px;
     background: var(--secondary-color);
@@ -1064,6 +1064,10 @@ input[type="number"]::-webkit-inner-spin-button {
     border: 1px solid var(--line-color);
     border-radius: calc(var(--default-px) * 1.5);
     box-shadow: 0 10px 20px rgba(0, 0, 0, .25);
+
+    &:has(.modal-header) {
+        padding-bottom: 18px !important;
+    }
 }
 
 .icon {
