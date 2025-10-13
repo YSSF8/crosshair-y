@@ -2,6 +2,9 @@ const { ipcRenderer } = require('electron');
 const fs = require('fs');
 
 document.addEventListener('DOMContentLoaded', () => {
+    if (localStorage.getItem('light-theme')) {
+        document.documentElement.classList.add('light-theme');
+    }
 
     const canvasContainer = document.getElementById('canvas-container');
     const canvasWrapper = document.getElementById('canvas-wrapper');

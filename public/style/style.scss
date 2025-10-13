@@ -560,7 +560,7 @@ body {
     border-radius: var(--default-px);
     padding: var(--default-px);
     transition: border-color 200ms;
-    
+
     &:focus {
         border-color: var(--accent-primary);
         outline: none;
@@ -571,6 +571,191 @@ input[type="number"]::-webkit-outer-spin-button,
 input[type="number"]::-webkit-inner-spin-button {
     -webkit-appearance: none;
     margin: 0;
+}
+
+.editor {
+    overflow: hidden;
+    height: 100vh;
+    width: 100vw;
+    color: var(--text);
+}
+
+.editor-container {
+    display: flex;
+    height: 100%;
+    width: 100%;
+    background-color: var(--primary-color);
+}
+
+.editor-toolbar {
+    display: flex;
+    flex-direction: column;
+    padding: var(--default-px);
+    gap: var(--default-px);
+    border-right: 1px solid var(--line-color);
+    background-color: var(--primary-color);
+}
+
+.tool-button {
+    all: unset;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    width: 40px;
+    height: 40px;
+    border-radius: var(--default-px);
+    background-color: var(--secondary-color);
+    cursor: pointer;
+    transition: background-color 200ms ease;
+}
+
+.tool-button:hover {
+    background-color: var(--tertiary-color);
+}
+
+.tool-button.active {
+    background-color: var(--accent-primary);
+}
+
+.tool-button svg {
+    width: 24px;
+    height: 24px;
+    fill: var(--icon);
+}
+
+.canvas-container {
+    flex: 1;
+    position: relative;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    overflow: auto;
+}
+
+#canvas-wrapper {
+    position: relative;
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+}
+
+#editor-svg {
+    display: block;
+    background-color: #fff;
+}
+
+#editor-svg .selected {
+    outline: 2px dashed var(--accent-primary);
+    outline-offset: 2px;
+}
+
+#editor-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+}
+
+.editor-sidebar {
+    width: 250px;
+    padding: var(--default-px);
+    border-left: 1px solid var(--line-color);
+    background-color: var(--primary-color);
+    display: flex;
+    flex-direction: column;
+    gap: calc(var(--default-px) * 2);
+    overflow-y: auto;
+}
+
+.sidebar-heading {
+    margin: 0;
+    padding-bottom: var(--default-px);
+    border-bottom: 1px solid var(--line-color);
+    color: var(--accent-primary);
+    font-size: 16px;
+}
+
+.properties-panel,
+.palette-panel {
+    display: flex;
+    flex-direction: column;
+    gap: var(--default-px);
+}
+
+.property-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 14px;
+}
+
+.property-item input[type="number"] {
+    width: 60px;
+    background: var(--secondary-color);
+    border: 1px solid var(--line-color);
+    color: var(--text);
+    border-radius: calc(var(--default-px) / 2);
+    padding: calc(var(--default-px) / 2);
+}
+
+.property-item input[type="color"] {
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+    width: 40px;
+    height: 24px;
+    background-color: transparent;
+    border: 1px solid var(--line-color);
+    border-radius: calc(var(--default-px) / 2);
+    cursor: pointer;
+}
+
+.property-item input[type="color"]::-webkit-color-swatch {
+    border-radius: calc(var(--default-px) / 2 - 1px);
+    border: none;
+}
+
+.property-item input[type="color"]::-moz-color-swatch {
+    border-radius: calc(var(--default-px) / 2 - 1px);
+    border: none;
+}
+
+.color-swatch {
+    display: flex;
+    align-items: center;
+    gap: var(--default-px);
+    padding: calc(var(--default-px) / 2);
+    border-radius: calc(var(--default-px) / 2);
+    cursor: pointer;
+    transition: background-color 200ms ease;
+}
+
+.color-swatch:hover {
+    background-color: var(--hover-state);
+}
+
+.color-swatch-preview {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    border: 1px solid var(--line-color);
+}
+
+.color-swatch-label {
+    font-family: monospace;
+    font-size: 14px;
+}
+
+.zoom-control {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    align-items: center;
+    padding: 8px;
+}
+
+#zoom-slider {
+    transform: translateX(-40px);
 }
 
 .icon {
