@@ -944,6 +944,19 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
+        if ((e.ctrlKey || e.metaKey) && !e.shiftKey) {
+            if (e.key === '=' || e.key === '+') {
+                e.preventDefault();
+                applyZoom(Math.min(10, state.zoom * 1.125));
+                return;
+            }
+            if (e.key === '-' || e.key === '_') {
+                e.preventDefault();
+                applyZoom(Math.max(0.1, state.zoom / 1.125));
+                return;
+            }
+        }
+
         if (e.ctrlKey || e.metaKey) {
             if (e.key === 'c' && state.selectedElement) {
                 e.preventDefault();
