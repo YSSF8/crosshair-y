@@ -784,18 +784,41 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     document.addEventListener('keydown', e => {
+        // Existing shortcuts
         if (e.key === 'Delete' && state.selectedElement) {
             undoManager.recordState();
             state.selectedElement.remove();
             deselectElement();
             extractAndBuildPalette();
         }
-        
+
         if (e.key === 'Escape' && state.currentTool === 'path' && state.pathStep > 0) {
             if (state.currentPath) {
                 state.currentPath.remove();
             }
             resetPathState();
+        }
+
+        if (e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return;
+
+        const toolButtons = document.querySelectorAll('.tool-button');
+
+        switch (e.key.toLowerCase()) {
+            case 'v':
+                toolButtons[0].click();
+                break;
+            case 'r':
+                toolButtons[1].click();
+                break;
+            case 'e':
+                toolButtons[2].click();
+                break;
+            case 'l':
+                toolButtons[3].click();
+                break;
+            case 'p':
+                toolButtons[4].click();
+                break;
         }
     });
 
@@ -859,7 +882,7 @@ document.addEventListener('DOMContentLoaded', () => {
             createCurvePath();
             state.curvePoints.p1 = pt;
             state.pathStep = 1;
-            
+
             const marker = document.createElementNS(SVG_NS, 'circle');
             marker.setAttribute('cx', pt.x);
             marker.setAttribute('cy', pt.y);
@@ -867,11 +890,11 @@ document.addEventListener('DOMContentLoaded', () => {
             marker.setAttribute('fill', 'red');
             marker.setAttribute('class', 'temp-marker');
             overlaySVG.appendChild(marker);
-            
+
         } else if (state.pathStep === 1) {
             state.curvePoints.p2 = pt;
             state.pathStep = 2;
-            
+
             const marker = document.createElementNS(SVG_NS, 'circle');
             marker.setAttribute('cx', pt.x);
             marker.setAttribute('cy', pt.y);
@@ -879,9 +902,9 @@ document.addEventListener('DOMContentLoaded', () => {
             marker.setAttribute('fill', 'blue');
             marker.setAttribute('class', 'temp-marker');
             overlaySVG.appendChild(marker);
-            
+
             updateCurvePath(pt);
-            
+
         } else if (state.pathStep === 2) {
             finalizeCurve();
         }
@@ -953,7 +976,7 @@ document.addEventListener('DOMContentLoaded', () => {
         path.setAttribute('stroke-width', propStrokeWidth.value);
         path.setAttribute('stroke-linecap', 'round');
         path.setAttribute('stroke-linejoin', 'round');
-        
+
         editorSVG.appendChild(path);
         state.currentPath = path;
     }
@@ -962,16 +985,16 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!state.currentPath || !state.curvePoints.p1 || !state.curvePoints.p2) return;
 
         const { p1, p2 } = state.curvePoints;
-        
+
         const midX = (p1.x + p2.x) / 2;
         const midY = (p1.y + p2.y) / 2;
-        
+
         const dirX = currentPt.x - midX;
         const dirY = currentPt.y - midY;
-        
+
         const controlX = midX - dirX;
         const controlY = midY - dirY;
-        
+
         const d = `M ${p1.x} ${p1.y} Q ${controlX} ${controlY} ${p2.x} ${p2.y}`;
         state.currentPath.setAttribute('d', d);
     }
