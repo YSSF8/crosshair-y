@@ -13,6 +13,7 @@
   --primary-opposite: #e0e0e0;
   --primary-color-translucent: rgba(24, 24, 24, 0.6);
   --secondary-color-translucent: rgba(37, 37, 37, 0.6);
+  --blur-amount: 10px;
   --accent-primary: #0057b7;
   --accent-primary-dark: #05203f;
   --accent-secondary: #ff7eb6;
@@ -249,8 +250,8 @@ body.body-settings .section {
   justify-content: center;
   padding: calc(var(--default-px) / 2);
   background-color: var(--primary-color-translucent);
-  -webkit-backdrop-filter: blur(10px);
-          backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(var(--blur-amount, 10px));
+          backdrop-filter: blur(var(--blur-amount, 10px));
   position: fixed;
   width: calc(100% - var(--default-px) * 4 - 2px);
   border: 1px solid var(--line-color);
