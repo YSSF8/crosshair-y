@@ -1304,11 +1304,17 @@ document.addEventListener('DOMContentLoaded', () => {
         if (element) {
             menuItems['Bring to front'] = () => {
                 undoManager.recordState();
-                editorSVG.appendChild(element);
+                const layer = state.layerManager.getLayerForElement(element);
+                if (layer) {
+                    layer.group.appendChild(element);
+                }
             };
             menuItems['Send to back'] = () => {
                 undoManager.recordState();
-                editorSVG.insertBefore(element, editorSVG.firstChild);
+                const layer = state.layerManager.getLayerForElement(element);
+                if (layer && layer.group.firstChild) {
+                    layer.group.insertBefore(element, layer.group.firstChild);
+                }
             };
         }
 
@@ -2036,16 +2042,22 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     ipcRenderer.on('menu-bring-to-front', () => {
         if (state.selectedElement) {
-            const wrapper = state.selectedElement;
-            editorSVG.appendChild(wrapper);
-            updateSelectionOverlay();
+            undoManager.recordState();
+            const layer = state.layerManager.getLayerForElement(state.selectedElement);
+            if (layer) {
+                layer.group.appendChild(state.selectedElement);
+                updateSelectionOverlay();
+            }
         }
     });
     ipcRenderer.on('menu-send-to-back', () => {
         if (state.selectedElement) {
-            const wrapper = state.selectedElement;
-            editorSVG.insertBefore(wrapper, editorSVG.firstChild);
-            updateSelectionOverlay();
+            undoManager.recordState();
+            const layer = state.layerManager.getLayerForElement(state.selectedElement);
+            if (layer && layer.group.firstChild) {
+                layer.group.insertBefore(state.selectedElement, layer.group.firstChild);
+                updateSelectionOverlay();
+            }
         }
     });
     ipcRenderer.on('menu-zoom-in', () => {
