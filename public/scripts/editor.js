@@ -446,10 +446,6 @@ document.addEventListener('DOMContentLoaded', () => {
                             e.preventDefault();
                             editableElement.textContent = originalName;
                             cancelBtn.click();
-                        } else if (e.key === 'Backspace') {
-                            if (editableElement.textContent.length <= 1) {
-                                e.preventDefault();
-                            }
                         }
 
                         e.stopPropagation();
