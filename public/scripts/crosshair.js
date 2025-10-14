@@ -17,20 +17,28 @@ document.addEventListener('DOMContentLoaded', () => {
 const SIMPLE_CROSSHAIR = './crosshairs/Simple.png';
 
 ipcRenderer.on('crosshair-loaded', (event, path) => {
-    img.src = path.replace('public/crosshairs', './crosshairs');
+    const newSrc = path.replace('public/crosshairs', './crosshairs');
 
-    if (img.src.indexOf('./crosshairs')) {
+    if (img.src !== newSrc) {
+        img.src = newSrc;
+    }
+
+    if (img.src.indexOf('./crosshairs') !== -1) {
         fetch(img.src)
             .then(res => {
                 if (!res.ok) {
+                    console.warn('Crosshair not found, falling back to default');
                     img.src = SIMPLE_CROSSHAIR;
                 }
                 return res.blob();
             })
-            .then(data => console.log('Data retreived successfully', data))
-            .catch(() => {
+            .then(data => console.log('Data retrieved successfully', data))
+            .catch((error) => {
+                console.error('Error loading crosshair:', error);
                 img.src = SIMPLE_CROSSHAIR;
-                alert('An error occured while trying to load crosshair');
+                if (!path.includes('Simple.png')) {
+                    alert('An error occurred while trying to load crosshair');
+                }
             });
     }
 });

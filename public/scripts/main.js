@@ -172,14 +172,16 @@ function renderCustomSection(listToRender) {
                                         text: 'Delete',
                                         event: 'click',
                                         eventAction: (e) => {
-                                            originalNames = originalNames.filter(name => name !== fileName);
-                                            favorites = favorites.filter(name => name !== fileName);
+                                            const fileNameToDelete = fileName;
+                                            originalNames = originalNames.filter(name => name !== fileNameToDelete);
+                                            favorites = favorites.filter(name => name !== fileNameToDelete);
                                             localStorage.setItem('favorites', JSON.stringify(favorites));
 
-                                            ipcRenderer.send('delete-crosshair', fileName);
+                                            ipcRenderer.send('delete-crosshair', fileNameToDelete);
                                             updateAndRender();
 
                                             e.target.closest('.modal-background').remove();
+                                            refreshDir.click();
                                         }
                                     },
                                     { element: 'button', text: 'Cancel', event: 'click', eventAction: (e) => e.target.closest('.modal-background').remove() }
@@ -225,6 +227,28 @@ function attachClickHandlers() {
         });
     });
 }
+
+ipcRenderer.on('crosshair-deleted-cleanup', (event, deletedFileName) => {
+    const currentCustomCrosshair = localStorage.getItem('custom-crosshair');
+    if (currentCustomCrosshair === deletedFileName) {
+        localStorage.removeItem('custom-crosshair');
+        customCrosshair = null;
+
+        const defaultCrosshair = DEFAULT_CONFIG.crosshair;
+        ipcRenderer.send('change-crosshair', defaultCrosshair);
+
+        config.crosshair = defaultCrosshair;
+        localStorage.setItem('config', JSON.stringify(config));
+
+        refreshOverlay();
+    }
+
+    const favorites = JSON.parse(localStorage.getItem('favorites')) || [];
+    const updatedFavorites = favorites.filter(f => f !== deletedFileName);
+    localStorage.setItem('favorites', JSON.stringify(updatedFavorites));
+
+    updateAndRender();
+});
 
 ipcRenderer.on('custom-crosshairs-response', (_event, crosshairs) => {
     originalNames = crosshairs;

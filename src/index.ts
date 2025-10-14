@@ -9,6 +9,7 @@ import {
     nativeImage
 } from 'electron';
 import fs from 'fs/promises';
+import _fs from 'fs';
 import path from 'path';
 import openurl from 'openurl';
 import axios from 'axios';
@@ -90,7 +91,6 @@ app.on('ready', () => {
         window.hide();
     });
 
-    // Register the global shortcut for saving mouse position
     try {
         globalShortcut.register('CommandOrControl+Shift+S', () => {
             const { x, y } = screen.getCursorScreenPoint();
@@ -169,8 +169,22 @@ let config: Config = { ...DEFAULT_CONFIG };
 
 function getSelectedCrosshairPath() {
     const cfg = config ?? DEFAULT_CONFIG;
+
     if (customCrosshair && customCrosshairsDir) {
-        return path.join(customCrosshairsDir, customCrosshair);
+        const fullPath = path.join(customCrosshairsDir, customCrosshair);
+
+        try {
+            if (_fs.existsSync(fullPath)) {
+                return fullPath;
+            } else {
+                console.warn(`Custom crosshair not found: ${fullPath}, falling back to default`);
+                customCrosshair = null;
+                return path.join(CROSSHAIRS_DIR, DEFAULT_CONFIG.crosshair);
+            }
+        } catch (error) {
+            console.error('Error checking crosshair file:', error);
+            return path.join(CROSSHAIRS_DIR, DEFAULT_CONFIG.crosshair);
+        }
     } else {
         if (process.platform === 'linux') {
             return path.join(CROSSHAIRS_DIR, '..', 'public', 'crosshairs', cfg.crosshair);
@@ -399,6 +413,18 @@ ipcMain.on('delete-crosshair', async (_e, fileName: string) => {
     const full = path.join(dir, fileName);
     try {
         await fs.unlink(full);
+
+        const currentCrosshair = getSelectedCrosshairFilename();
+        if (currentCrosshair === fileName) {
+            customCrosshair = null;
+            config.crosshair = DEFAULT_CONFIG.crosshair;
+
+            const defaultCrosshairPath = getSelectedCrosshairPath();
+            crosshair.setImage(defaultCrosshairPath || '');
+
+            window.webContents.send('crosshair-deleted-cleanup', fileName);
+        }
+
         window.webContents.send('refresh-crosshairs');
     } catch (err) {
         console.error(err);
