@@ -12,6 +12,26 @@ function debounce(func, wait) {
     };
 }
 
+// Add global keyboard shortcuts for search
+document.addEventListener('keydown', (e) => {
+    // F3 or Ctrl+F to focus search input
+    if (e.key === 'F3' || (e.ctrlKey && e.key === 'f')) {
+        e.preventDefault();
+
+        // Check if settings iframe is open
+        const frame = document.querySelector('.full-frame');
+        if (frame) {
+            const frameDoc = frame.contentDocument || frame.contentWindow.document;
+            const searchInput = frameDoc.querySelector('#search-input');
+
+            if (searchInput) {
+                searchInput.focus();
+                searchInput.select();
+            }
+        }
+    }
+});
+
 settings.addEventListener('click', () => {
     const frame = document.createElement('iframe');
     frame.src = './settings.html';
@@ -122,6 +142,16 @@ settings.addEventListener('click', () => {
 
         searchInput.addEventListener('blur', () => {
             navigationInput.classList.remove('search-active');
+        });
+
+        // Add keyboard shortcut listener for the iframe document as well
+        frameDoc.addEventListener('keydown', (e) => {
+            // F3 or Ctrl+F to focus search input
+            if (e.key === 'F3' || (e.ctrlKey && e.key === 'f')) {
+                e.preventDefault();
+                searchInput.focus();
+                searchInput.select();
+            }
         });
 
         if (localStorage.getItem('light-theme')) {
