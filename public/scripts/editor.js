@@ -42,6 +42,14 @@ document.addEventListener('DOMContentLoaded', () => {
             type: null,
             offset: { x: 10, y: 10 }
         },
+        smartGuides: {
+            enabled: true,
+            thresholdPx: 6,
+            guides: { v: [], h: [] },
+            vLine: null,
+            hLine: null,
+            baseAxes: null
+        },
         currentPath: null,
         pathStep: 0,
         curvePoints: { p1: null, p2: null },
@@ -599,6 +607,7 @@ document.addEventListener('DOMContentLoaded', () => {
         ipcRenderer.on('load-file', (event, filePath) => loadSVG(filePath));
         setBaseViewBoxFromEditor();
         setupZoomControls();
+        setupSmartGuidesUI();
 
         state.layerManager = new LayerManager(editorSVG, document.getElementById('layers-panel'));
 
@@ -911,6 +920,9 @@ document.addEventListener('DOMContentLoaded', () => {
         state.selectionBox = null;
         state.activeContextMenu = null;
         updatePropertiesForSelection();
+        hideSnapLines();
+        state.smartGuides.guides = { v: [], h: [] };
+        state.smartGuides.baseAxes = null;
     }
 
     function createSelectionBox(element) {
@@ -1272,6 +1284,217 @@ document.addEventListener('DOMContentLoaded', () => {
         console.log(`[APPLY RESIZE] Element: ${target.tagName} → x=${x}, y=${y}, w=${w}, h=${h}`);
     }
 
+    function setupSmartGuidesUI() {
+        const toggle = document.getElementById('toggle-smart-guides');
+        if (toggle) {
+            toggle.checked = state.smartGuides.enabled;
+            toggle.addEventListener('change', () => {
+                state.smartGuides.enabled = !!toggle.checked;
+                if (!state.smartGuides.enabled) hideSnapLines();
+            });
+        }
+    }
+
+    function ensureSnapLine(type) {
+        if (type === 'v') {
+            if (!state.smartGuides.vLine) {
+                const l = document.createElementNS(SVG_NS, 'line');
+                l.setAttribute('stroke', '#FF2DA4');
+                l.setAttribute('stroke-width', '1');
+                l.setAttribute('stroke-dasharray', '5 4');
+                l.setAttribute('vector-effect', 'non-scaling-stroke');
+                l.style.pointerEvents = 'none';
+                overlaySVG.appendChild(l);
+                state.smartGuides.vLine = l;
+            }
+            return state.smartGuides.vLine;
+        } else {
+            if (!state.smartGuides.hLine) {
+                const l = document.createElementNS(SVG_NS, 'line');
+                l.setAttribute('stroke', '#FF2DA4');
+                l.setAttribute('stroke-width', '1');
+                l.setAttribute('stroke-dasharray', '5 4');
+                l.setAttribute('vector-effect', 'non-scaling-stroke');
+                l.style.pointerEvents = 'none';
+                overlaySVG.appendChild(l);
+                state.smartGuides.hLine = l;
+            }
+            return state.smartGuides.hLine;
+        }
+    }
+
+    function hideSnapLines() {
+        if (state.smartGuides.vLine) state.smartGuides.vLine.style.display = 'none';
+        if (state.smartGuides.hLine) state.smartGuides.hLine.style.display = 'none';
+    }
+
+    function showSnapLine(type, pos) {
+        const vb = parseViewBox(overlaySVG);
+        if (type === 'v') {
+            const l = ensureSnapLine('v');
+            l.setAttribute('x1', pos);
+            l.setAttribute('x2', pos);
+            l.setAttribute('y1', vb.y);
+            l.setAttribute('y2', vb.y + vb.h);
+            l.style.display = '';
+        } else {
+            const l = ensureSnapLine('h');
+            l.setAttribute('y1', pos);
+            l.setAttribute('y2', pos);
+            l.setAttribute('x1', vb.x);
+            l.setAttribute('x2', vb.x + vb.w);
+            l.style.display = '';
+        }
+    }
+
+    function computeOverlayAxesForElement(el) {
+        try {
+            const bbox = el.getBBox();
+            if (!bbox || !isFinite(bbox.x) || !isFinite(bbox.y)) {
+                return null;
+            }
+            const tl = localToOverlay(el, bbox.x, bbox.y);
+            const br = localToOverlay(el, bbox.x + bbox.width, bbox.y + bbox.height);
+
+            const left = Math.min(tl.x, br.x);
+            const right = Math.max(tl.x, br.x);
+            const top = Math.min(tl.y, br.y);
+            const bottom = Math.max(tl.y, br.y);
+            const cx = (left + right) / 2;
+            const cy = (top + bottom) / 2;
+
+            return { left, right, top, bottom, cx, cy };
+        } catch (_) {
+            return null;
+        }
+    }
+
+    function prepareSmartGuidesForDrag(draggedWrapper) {
+        const guidesV = [];
+        const guidesH = [];
+
+        if (state.baseViewBox) {
+            const centerX = state.baseViewBox.x + state.baseViewBox.w / 2;
+            const centerY = state.baseViewBox.y + state.baseViewBox.h / 2;
+            guidesV.push(centerX);
+            guidesH.push(centerY);
+        }
+
+        const candidates = Array.from(editorSVG.querySelectorAll('g[data-resize-wrapper="1"], path, rect, circle, ellipse, line, text'));
+
+        for (const node of candidates) {
+            if (draggedWrapper && (node === draggedWrapper || draggedWrapper.contains(node))) continue;
+
+            if (node.hasAttribute && node.hasAttribute('data-layer')) continue;
+            if (node.tagName && node.tagName.toLowerCase() === 'defs') continue;
+
+            if (node.tagName && node.tagName.toLowerCase() !== 'g') {
+                const wr = node.closest('g[data-resize-wrapper="1"]');
+                if (wr) continue;
+            }
+
+            const computedDisplay = getComputedStyle(node).display;
+            if (computedDisplay === 'none') continue;
+
+            const axes = computeOverlayAxesForElement(node);
+            if (!axes) continue;
+
+            guidesV.push(axes.left, axes.cx, axes.right);
+            guidesH.push(axes.top, axes.cy, axes.bottom);
+        }
+
+        const dedup = (arr) => Array.from(new Set(arr.map(v => +(+v).toFixed(3))));
+        state.smartGuides.guides.v = dedup(guidesV);
+        state.smartGuides.guides.h = dedup(guidesH);
+
+        const baseAxes = computeOverlayAxesForElement(draggedWrapper);
+        state.smartGuides.baseAxes = baseAxes || null;
+    }
+
+    function applySmartSnapping(dx, dy, altPressed) {
+        if (!state.smartGuides.enabled || altPressed || !state.smartGuides.baseAxes || !state.dragContext) {
+            hideSnapLines();
+            return { dx, dy };
+        }
+
+        const guidesV = state.smartGuides.guides.v || [];
+        const guidesH = state.smartGuides.guides.h || [];
+        const base = state.dragContext.base || { sx: 1, sy: 1 };
+        const sx = Math.abs(base.sx || 1);
+        const sy = Math.abs(base.sy || 1);
+
+        const baseAxes = state.smartGuides.baseAxes;
+
+        const predX = [
+            baseAxes.left + dx * sx,
+            baseAxes.cx + dx * sx,
+            baseAxes.right + dx * sx
+        ];
+        const predY = [
+            baseAxes.top + dy * sy,
+            baseAxes.cy + dy * sy,
+            baseAxes.bottom + dy * sy
+        ];
+
+        const m = overlaySVG.getScreenCTM();
+        const scaleX = m ? Math.hypot(m.a, m.b) : 1;
+        const scaleY = m ? Math.hypot(m.c, m.d) : 1;
+        const thresholdPx = state.smartGuides.thresholdPx;
+        const tolX = thresholdPx / (scaleX || 1);
+        const tolY = thresholdPx / (scaleY || 1);
+
+        let bestV = null;
+        for (let i = 0; i < 3; i++) {
+            const p = predX[i];
+            for (let g = 0; g < guidesV.length; g++) {
+                const target = guidesV[g];
+                const d = Math.abs(target - p);
+                if (d <= tolX) {
+                    const distPx = d * (scaleX || 1);
+                    if (!bestV || distPx < bestV.distPx) {
+                        bestV = { target, i, distPx };
+                    }
+                }
+            }
+        }
+
+        let bestH = null;
+        for (let i = 0; i < 3; i++) {
+            const p = predY[i];
+            for (let g = 0; g < guidesH.length; g++) {
+                const target = guidesH[g];
+                const d = Math.abs(target - p);
+                if (d <= tolY) {
+                    const distPx = d * (scaleY || 1);
+                    if (!bestH || distPx < bestH.distPx) {
+                        bestH = { target, i, distPx };
+                    }
+                }
+            }
+        }
+
+        let outDx = dx;
+        let outDy = dy;
+
+        if (bestV) {
+            const baseAxis = [baseAxes.left, baseAxes.cx, baseAxes.right][bestV.i];
+            outDx = (bestV.target - baseAxis) / (sx || 1);
+            showSnapLine('v', bestV.target);
+        } else {
+            if (state.smartGuides.vLine) state.smartGuides.vLine.style.display = 'none';
+        }
+
+        if (bestH) {
+            const baseAxis = [baseAxes.top, baseAxes.cy, baseAxes.bottom][bestH.i];
+            outDy = (bestH.target - baseAxis) / (sy || 1);
+            showSnapLine('h', bestH.target);
+        } else {
+            if (state.smartGuides.hLine) state.smartGuides.hLine.style.display = 'none';
+        }
+
+        return { dx: outDx, dy: outDy };
+    }
+
     function setupContextMenu(element) {
         if (state.activeContextMenu) state.activeContextMenu.destroy();
 
@@ -1613,6 +1836,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     startPoint: state.startPoint,
                     base: getTransformComponents(state.selectedElement)
                 };
+
+                prepareSmartGuidesForDrag(state.selectedElement);
+                hideSnapLines();
             } else {
                 deselectElement();
             }
@@ -1680,10 +1906,12 @@ document.addEventListener('DOMContentLoaded', () => {
             const dx = pt.x - state.dragContext.startPoint.x;
             const dy = pt.y - state.dragContext.startPoint.y;
 
+            const snap = applySmartSnapping(dx, dy, e.altKey);
+
             const b = state.dragContext.base;
             setTransform(state.selectedElement, {
-                tx: b.tx + dx,
-                ty: b.ty + dy,
+                tx: b.tx + snap.dx,
+                ty: b.ty + snap.dy,
                 sx: b.sx,
                 sy: b.sy,
             });
@@ -1714,6 +1942,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (state.isDragging) {
             state.isDragging = false;
+            state.smartGuides.guides = { v: [], h: [] };
+            state.smartGuides.baseAxes = null;
+            hideSnapLines();
         }
 
         if (state.isDrawing && state.currentTool !== 'path') {
