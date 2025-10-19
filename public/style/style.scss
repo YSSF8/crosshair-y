@@ -13,6 +13,8 @@
 
     --primary-color-translucent: rgba(24, 24, 24, 0.6);
     --secondary-color-translucent: rgba(37, 37, 37, 0.6);
+    --navigation-inset-shadow: rgba(255, 255, 255, 0.03);
+    --navigation-outer-shadow: rgba(0, 0, 0, 0.4);
     --blur-amount: 10px;
 
     --accent-primary: #0057b7;
@@ -25,6 +27,7 @@
 
     --danger-primary: #ff3b30;
     --danger-secondary: #ff3b3033;
+    --danger-tertiary: #b91c1c;
 
     --text: #fff;
 }
@@ -55,6 +58,8 @@ html {
     --tertiary-color: #d0d0d0;
     --primary-color-translucent: rgba(240, 240, 240, 0.6);
     --secondary-color-translucent: rgba(224, 224, 224, 0.6);
+    --navigation-inset-shadow: rgba(0, 0, 0, 0.05);
+    --navigation-outer-shadow: rgba(0, 0, 0, 0.2);
     --line-color: #ccc;
     --grayed-out: #444;
     --scroll-bar-normal: #b0b0b0;
@@ -284,14 +289,20 @@ body {
     align-items: center;
     justify-content: center;
     padding: calc(var(--default-px) / 2);
-    background-color: var(--primary-color-translucent);
+    background: linear-gradient(135deg,
+            rgba(24, 24, 24, 0.25),
+            rgba(37, 37, 37, 0.05));
+    backdrop-filter: blur(15px) saturate(180%);
     backdrop-filter: blur(var(--blur-amount, 10px));
     position: fixed;
     width: calc(100% - var(--default-px) * 4 - 2px);
     border: 1px solid var(--line-color);
     border-radius: 999px;
     margin-top: -8px;
-    box-shadow: 0 0 4px 2px rgba(0, 0, 0, 0.1);
+    box-shadow:
+        inset 0 0 20px var(--navigation-inset-shadow),
+        inset 0 0 5px var(--navigation-inset-shadow),
+        0 8px 24px rgba(0, 0, 0, 0.4);
     z-index: 10000;
 
     .navigation-tabs {
@@ -1046,11 +1057,11 @@ input[type="number"]::-webkit-inner-spin-button {
 }
 
 .modal-button-danger {
-    background-color: #dc2626;
+    background-color: var(--danger-primary);
     color: white;
 
     &:hover {
-        background-color: #b91c1c;
+        background-color: var(--danger-tertiary);
     }
 }
 
