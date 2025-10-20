@@ -134,6 +134,7 @@ document.addEventListener('DOMContentLoaded', () => {
             this.editingLayerId = null;
             this.isEditing = false;
             this.canceledEdit = false;
+            this.dragState = null;
 
             this.init();
         }
@@ -410,6 +411,133 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
 
+        startDrag(e, layerId) {
+            if (e.button !== 0) return;
+
+            const layerElement = this.layersPanel.querySelector(`[data-layer-id="${layerId}"]`);
+            if (!layerElement) return;
+
+            e.stopPropagation();
+            e.preventDefault();
+
+            const rect = layerElement.getBoundingClientRect();
+
+            const placeholder = document.createElement('div');
+            placeholder.className = 'layer-placeholder';
+            placeholder.style.height = `${rect.height}px`;
+            placeholder.style.visibility = 'hidden';
+
+            layerElement.parentNode.insertBefore(placeholder, layerElement.nextSibling);
+
+            layerElement.style.position = 'absolute';
+            layerElement.style.width = `${rect.width}px`;
+            layerElement.style.left = `${rect.left}px`;
+            layerElement.style.top = `${rect.top}px`;
+            layerElement.style.zIndex = '1000';
+            layerElement.classList.add('dragging');
+
+            document.body.appendChild(layerElement);
+
+            this.dragState = {
+                draggedElement: layerElement,
+                placeholder,
+                startY: e.clientY,
+                startTop: rect.top,
+                layerId,
+                initialIndex: this.layers.findIndex(l => l.id === layerId)
+            };
+
+            document.addEventListener('mousemove', this.onDragMove.bind(this));
+            document.addEventListener('mouseup', this.onDragEnd.bind(this));
+        }
+
+        onDragMove(e) {
+            if (!this.dragState) return;
+
+            const deltaY = e.clientY - this.dragState.startY;
+            this.dragState.draggedElement.style.top = `${this.dragState.startTop + deltaY}px`;
+
+            this.updatePlaceholderPosition(e.clientY);
+        }
+
+        updatePlaceholderPosition(mouseY) {
+            const items = this.layersPanel.querySelectorAll('.layer-item');
+            let insertBefore = null;
+
+            for (const item of items) {
+                const rect = item.getBoundingClientRect();
+                if (mouseY < rect.top + rect.height / 2) {
+                    insertBefore = item;
+                    break;
+                }
+            }
+
+            const currentInsertBefore = this.dragState.placeholder.nextSibling;
+
+            if (insertBefore === currentInsertBefore) return;
+
+            const oldRects = new Map();
+            for (const item of items) {
+                oldRects.set(item, item.getBoundingClientRect());
+            }
+
+            this.layersPanel.insertBefore(this.dragState.placeholder, insertBefore);
+
+            requestAnimationFrame(() => {
+                for (const item of items) {
+                    const oldRect = oldRects.get(item);
+                    const newRect = item.getBoundingClientRect();
+                    const deltaX = oldRect.left - newRect.left;
+                    const deltaY = oldRect.top - newRect.top;
+
+                    item.style.transition = 'none';
+                    item.style.transform = `translate(${deltaX}px, ${deltaY}px)`;
+
+                    requestAnimationFrame(() => {
+                        item.style.transition = '';
+                        item.style.transform = '';
+                    });
+                }
+            });
+        }
+
+        onDragEnd(e) {
+            if (!this.dragState) return;
+
+            document.removeEventListener('mousemove', this.onDragMove.bind(this));
+            document.removeEventListener('mouseup', this.onDragEnd.bind(this));
+
+            const placeholderDomIndex = Array.from(this.layersPanel.children).indexOf(this.dragState.placeholder);
+            const newIndex = this.layers.length - 1 - placeholderDomIndex;
+
+            const initialIndex = this.dragState.initialIndex;
+            const layer = this.layers[initialIndex];
+
+            this.layers.splice(initialIndex, 1);
+            this.layers.splice(newIndex, 0, layer);
+
+            this.editorSVG.innerHTML = '';
+            this.layers.forEach(layer => {
+                this.editorSVG.appendChild(layer.group);
+            });
+
+            this.dragState.placeholder.remove();
+            this.dragState.draggedElement.remove();
+
+            this.dragState.draggedElement.style.position = '';
+            this.dragState.draggedElement.style.width = '';
+            this.dragState.draggedElement.style.left = '';
+            this.dragState.draggedElement.style.top = '';
+            this.dragState.draggedElement.style.zIndex = '';
+            this.dragState.draggedElement.style.transform = '';
+            this.dragState.draggedElement.classList.remove('dragging');
+
+            this.renderLayers();
+            this.selectLayer(this.dragState.layerId);
+
+            this.dragState = null;
+        }
+
         renderLayers() {
             this.layersPanel.innerHTML = '';
 
@@ -529,31 +657,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
 
                 if (this.editingLayerId !== layer.id && !this.isEditing && !this.canceledEdit) {
-                    layerElement.setAttribute('draggable', 'true');
-                    layerElement.addEventListener('dragstart', (e) => {
-                        e.dataTransfer.setData('text/plain', layer.id);
-                    });
-
-                    layerElement.addEventListener('dragover', (e) => {
-                        e.preventDefault();
-                        layerElement.classList.add('drag-over');
-                    });
-
-                    layerElement.addEventListener('dragleave', () => {
-                        layerElement.classList.remove('drag-over');
-                    });
-
-                    layerElement.addEventListener('drop', (e) => {
-                        e.preventDefault();
-                        layerElement.classList.remove('drag-over');
-                        const sourceLayerId = e.dataTransfer.getData('text/plain');
-                        const sourceIndex = this.layers.findIndex(l => l.id === sourceLayerId);
-                        const targetIndex = this.layers.findIndex(l => l.id === layer.id);
-
-                        if (sourceIndex !== -1 && targetIndex !== -1) {
-                            const direction = sourceIndex < targetIndex ? 'down' : 'up';
-                            this.moveLayer(sourceLayerId, direction);
-                        }
+                    layerElement.addEventListener('mousedown', (e) => {
+                        if (e.target.closest('.layer-visibility-toggle') || e.target.closest('.layer-type-icon')) return;
+                        this.startDrag(e, layer.id);
                     });
                 }
 
