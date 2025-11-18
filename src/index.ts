@@ -6,7 +6,8 @@ import {
     globalShortcut,
     Tray,
     Menu,
-    nativeImage
+    nativeImage,
+    MenuItemConstructorOptions
 } from 'electron';
 import fs from 'fs/promises';
 import _fs from 'fs';
@@ -47,37 +48,9 @@ app.on('ready', () => {
     const trayIcon = nativeImage.createFromPath(iconPath).resize({ width: 16 });
     tray = new Tray(trayIcon);
 
-    const contextMenu = Menu.buildFromTemplate([
-        {
-            label: 'Show/Hide',
-            click: () => {
-                if (window.isVisible() && !window.isMinimized()) {
-                    window.hide();
-                } else {
-                    showMainWindow();
-                }
-            }
-        },
-        {
-            label: 'Toggle',
-            click: () => {
-                if (window && !window.isDestroyed()) {
-                    window.webContents.send('tray-toggle');
-                }
-            }
-        },
-        {
-            label: 'Quit',
-            click: () => {
-                window.removeAllListeners('close');
-                crosshair.close();
-                app.quit();
-            }
-        }
-    ]);
-
     tray.setToolTip('Crosshair Y');
-    tray.setContextMenu(contextMenu);
+
+    buildTrayMenu();
 
     tray.on('click', () => showMainWindow());
 
@@ -109,6 +82,99 @@ app.on('ready', () => {
 app.on('will-quit', () => {
     globalShortcut.unregisterAll();
 });
+
+let currentPresets: Record<string, Config> = {};
+
+ipcMain.on('update-tray-presets', (event, presets) => {
+    currentPresets = presets || {};
+    buildTrayMenu();
+});
+
+function buildTrayMenu() {
+    if (!tray) return;
+
+    const presetKeys = Object.keys(currentPresets);
+    const hasPresets = presetKeys.length > 0;
+
+    const presetMenu: MenuItemConstructorOptions[] = presetKeys.map(name => ({
+        label: name,
+        click: () => applyPresetFromTray(currentPresets[name])
+    }));
+
+    const contextMenu = Menu.buildFromTemplate([
+        {
+            label: 'Show/Hide',
+            click: () => {
+                if (window.isVisible() && !window.isMinimized()) {
+                    window.hide();
+                } else {
+                    showMainWindow();
+                }
+            }
+        },
+        {
+            label: 'Toggle',
+            click: () => {
+                if (window && !window.isDestroyed()) {
+                    window.webContents.send('tray-toggle');
+                }
+            }
+        },
+        { type: 'separator' },
+        {
+            label: 'Presets',
+            enabled: hasPresets,
+            submenu: hasPresets ? presetMenu : undefined
+        },
+        { type: 'separator' },
+        {
+            label: 'Quit',
+            click: () => {
+                window.removeAllListeners('close');
+                crosshair.close();
+                app.quit();
+            }
+        }
+    ]);
+
+    tray.setContextMenu(contextMenu);
+}
+
+function applyPresetFromTray(presetConfig: Config) {
+    config = { ...config, ...presetConfig };
+
+    if (config.crosshair && customCrosshairsDir) {
+        const possiblePath = path.join(customCrosshairsDir, config.crosshair);
+        if (_fs.existsSync(possiblePath) || config.crosshair.includes(customCrosshairsDir)) {
+            customCrosshair = config.crosshair.includes(path.sep) ? path.basename(config.crosshair) : config.crosshair;
+        } else {
+            customCrosshair = null;
+        }
+    } else {
+        customCrosshair = null;
+    }
+
+    const selectedCrosshair = getSelectedCrosshairPath();
+    crosshair.setImage(selectedCrosshair || '');
+
+    crosshair.size = +config.size;
+    crosshair.hue = +config.hue;
+    crosshair.rotation = +config.rotation;
+    crosshair.opacity = +config.opacity;
+    crosshair.fixedPosition = config.fixedPosition || false;
+    crosshair.xPosition = config.xPosition || 0;
+    crosshair.yPosition = config.yPosition || 0;
+
+    crosshair.applySize();
+    crosshair.applyHue();
+    crosshair.applyRotation();
+    crosshair.applyOpacity();
+    if (config.fixedPosition) crosshair.setBounds();
+
+    if (window && !window.isDestroyed()) {
+        window.webContents.send('update-config-ui', config);
+    }
+}
 
 function showMainWindow() {
     if (lastPosition.x !== undefined && lastPosition.y !== undefined) {

@@ -359,6 +359,9 @@ settings.addEventListener('click', () => {
             loadPresetSelect.innerHTML = '<option value="default">Default</option>';
 
             const presets = JSON.parse(localStorage.getItem('crosshair-presets') || '{}');
+
+            ipcRenderer.send('update-tray-presets', presets);
+
             Object.keys(presets).forEach(name => {
                 const opt = document.createElement('option');
                 opt.value = name;
@@ -370,6 +373,25 @@ settings.addEventListener('click', () => {
         }
 
         rebuildPresetList();
+
+        ipcRenderer.on('update-config-ui', (event, newConfig) => {
+            config = newConfig;
+            localStorage.setItem('config', JSON.stringify(config));
+
+            sizeRange.value = config.size;
+            hueRange.value = config.hue;
+            rotateRange.value = config.rotation;
+            opacityRange.value = config.opacity;
+
+            sizeRange.title = sizeRange.value;
+            hueRange.title = hueRange.value;
+            rotateRange.title = rotateRange.value;
+            opacityRange.title = parseFloat(opacityRange.value).toFixed(1);
+
+            fixedPositionToggle.checked = config.fixedPosition;
+            xPositionInput.value = config.xPosition;
+            yPositionInput.value = config.yPosition;
+        });
 
         loadPresetSelect.addEventListener('change', () => {
             const selectedPreset = loadPresetSelect.value;

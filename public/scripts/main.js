@@ -299,6 +299,14 @@ function applyReducedMotion(val) {
 
 applyReducedMotion(localStorage.getItem('reduced-motion') || 'system');
 
+const savedPresets = JSON.parse(localStorage.getItem('crosshair-presets') || '{}');
+ipcRenderer.send('update-tray-presets', savedPresets);
+
+ipcRenderer.on('update-config-ui', (event, newConfig) => {
+    config = newConfig;
+    localStorage.setItem('config', JSON.stringify(config));
+});
+
 function refreshOverlay() {
     ipcRenderer.send('destroy-crosshair');
     ipcRenderer.send('change-hue', config.hue);
