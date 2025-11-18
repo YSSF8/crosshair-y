@@ -124,6 +124,70 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const undoManager = new UndoManager();
 
+    function injectLayerStyles() {
+        const styleId = 'layer-animation-styles';
+        if (document.getElementById(styleId)) return;
+
+        const style = document.createElement('style');
+        style.id = styleId;
+        style.textContent = `
+        .layer-item {
+            position: relative;
+            box-sizing: border-box;
+            transition: transform 0.2s cubic-bezier(0.2, 0, 0.2, 1), 
+                        background-color 0.2s ease,
+                        box-shadow 0.2s ease;
+            will-change: transform, top, left; 
+        }
+
+        .layer-placeholder {
+            border-radius: 4px;
+            background: rgba(0, 0, 0, 0.05);
+            border: 1px dashed var(--line-color);
+            box-sizing: border-box;
+            margin: 4px 0;
+            transition: height 0.2s ease;
+        }
+
+        .layer-item.dragging {
+            position: fixed !important;
+            z-index: 10000;
+            width: var(--drag-width);
+            
+            background-color: var(--secondary-color);
+            border: 1px solid var(--accent-primary);
+            border-radius: 4px;
+            
+            box-shadow: 0 8px 20px rgba(0,0,0,0.3), 0 0 0 1px rgba(255,255,255,0.1);
+            opacity: 0.98;
+            
+            pointer-events: none;
+            cursor: grabbing;
+            transition: none !important;
+        }
+
+        .layer-item.dropping {
+            position: fixed !important;
+            z-index: 10000;
+            width: var(--drag-width);
+            
+            pointer-events: none;
+            
+            transition: 
+                top 0.4s cubic-bezier(0.34, 1.56, 0.64, 1), 
+                left 0.4s cubic-bezier(0.34, 1.56, 0.64, 1),
+                background-color 0.3s ease,
+                border-color 0.3s ease,
+                box-shadow 0.3s ease !important;
+        }
+        
+        .layer-item.dropping.active {
+            background-color: var(--accent-primary) !important;
+        }
+    `;
+        document.head.appendChild(style);
+    }
+
     class LayerManager {
         constructor(editorSVG, layersPanel) {
             this.editorSVG = editorSVG;
@@ -136,6 +200,7 @@ document.addEventListener('DOMContentLoaded', () => {
             this.canceledEdit = false;
             this.dragState = null;
 
+            injectLayerStyles();
             this.init();
         }
 
@@ -167,9 +232,7 @@ document.addEventListener('DOMContentLoaded', () => {
         handleGlobalKeyDown(e) {
             if (this.isEditing) {
                 const allowedKeys = ['Escape', 'Enter', 'Tab', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Backspace', 'Delete'];
-                if (!allowedKeys.includes(e.key) &&
-                    !(e.ctrlKey || e.metaKey) &&
-                    e.key.length === 1) {
+                if (!allowedKeys.includes(e.key) && !(e.ctrlKey || e.metaKey) && e.key.length === 1) {
                     e.stopPropagation();
                     e.preventDefault();
                 }
@@ -178,7 +241,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
         addLayer(name = `Layer ${this.nextLayerId}`) {
             const layerId = `layer-${this.nextLayerId++}`;
-
             const layerGroup = document.createElementNS("http://www.w3.org/2000/svg", "g");
             layerGroup.setAttribute('id', layerId);
             layerGroup.setAttribute('data-layer', 'true');
@@ -199,25 +261,18 @@ document.addEventListener('DOMContentLoaded', () => {
             this.layers.push(layer);
             this.renderLayers();
             this.selectLayer(layerId);
-
             return layer;
         }
 
         selectLayer(layerId) {
             if (this.isEditing) return;
-
             this.canceledEdit = false;
-
-            this.layers.forEach(layer => {
-                layer.selected = false;
-            });
-
+            this.layers.forEach(layer => layer.selected = false);
             const layerToSelect = this.layers.find(layer => layer.id === layerId);
             if (layerToSelect) {
                 layerToSelect.selected = true;
                 this.activeLayer = layerToSelect;
             }
-
             this.renderLayers();
         }
 
@@ -228,7 +283,6 @@ document.addEventListener('DOMContentLoaded', () => {
         renameSelectedLayer() {
             const selectedLayer = this.getSelectedLayer();
             if (!selectedLayer || this.isEditing) return;
-
             this.startEditingLayer(selectedLayer.id);
         }
 
@@ -237,7 +291,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 this.canceledEdit = false;
                 return;
             }
-
             this.editingLayerId = layerId;
             this.isEditing = true;
             this.canceledEdit = false;
@@ -277,92 +330,31 @@ document.addEventListener('DOMContentLoaded', () => {
 
         deleteSelectedLayer() {
             if (this.isEditing) return;
-
             const selectedLayer = this.getSelectedLayer();
             if (!selectedLayer || this.layers.length <= 1) return;
 
             if (this.deletingLayer) return;
             this.deletingLayer = true;
 
-            const modalContent = [
-                {
-                    element: 'div',
-                    extraClass: 'modal-header',
-                    children: [
-                        {
-                            element: 'h3',
-                            text: 'Delete Layer'
-                        }
-                    ]
-                },
-                {
-                    element: 'div',
-                    extraClass: 'modal-body',
-                    children: [
-                        {
-                            element: 'p',
-                            text: `Are you sure you want to delete layer "${selectedLayer.name}"?`
-                        }
-                    ]
-                },
-                {
-                    element: 'div',
-                    extraClass: 'modal-footer',
-                    children: [
-                        {
-                            element: 'button',
-                            extraClass: ['modal-button', 'modal-button-cancel'],
-                            text: 'Cancel',
-                            event: 'click',
-                            eventAction: () => {
-                                modal.remove();
-                                this.deletingLayer = false;
-                            }
-                        },
-                        {
-                            element: 'button',
-                            extraClass: ['modal-button', 'modal-button-danger'],
-                            text: 'Delete',
-                            event: 'click',
-                            eventAction: () => {
-                                modal.remove();
-                                this.performLayerDeletion(selectedLayer);
-                            }
-                        }
-                    ]
-                }
-            ];
-
-            const modal = new Modal(modalContent);
-
-            modal.modalBackground.addEventListener('click', (e) => {
-                if (e.target === modal.modalBackground) {
-                    modal.remove();
-                    this.deleletingLayer = false;
-                }
-            });
+            if (confirm(`Are you sure you want to delete layer "${selectedLayer.name}"?`)) {
+                this.performLayerDeletion(selectedLayer);
+            } else {
+                this.deletingLayer = false;
+            }
         }
 
         performLayerDeletion(layerToDelete) {
             const layerIndex = this.layers.findIndex(layer => layer.id === layerToDelete.id);
-
             layerToDelete.group.remove();
-
             this.layers.splice(layerIndex, 1);
-
             const newIndex = Math.min(layerIndex, this.layers.length - 1);
             this.selectLayer(this.layers[newIndex].id);
-
             this.renderLayers();
-
-            setTimeout(() => {
-                this.deletingLayer = false;
-            }, 100);
+            setTimeout(() => { this.deletingLayer = false; }, 100);
         }
 
         toggleLayerVisibility(layerId) {
             if (this.isEditing) return;
-
             const layer = this.layers.find(layer => layer.id === layerId);
             if (layer) {
                 layer.visible = !layer.visible;
@@ -373,10 +365,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
         moveLayer(layerId, direction) {
             if (this.isEditing) return;
-
             const layerIndex = this.layers.findIndex(layer => layer.id === layerId);
             if (layerIndex === -1) return;
-
             let newIndex;
             if (direction === 'up' && layerIndex < this.layers.length - 1) {
                 newIndex = layerIndex + 1;
@@ -385,14 +375,10 @@ document.addEventListener('DOMContentLoaded', () => {
             } else {
                 return;
             }
-
             [this.layers[layerIndex], this.layers[newIndex]] = [this.layers[newIndex], this.layers[layerIndex]];
-
-            this.editorSVG.innerHTML = '';
-            this.layers.forEach(layer => {
-                this.editorSVG.appendChild(layer.group);
-            });
-
+            const fragment = document.createDocumentFragment();
+            this.layers.forEach(layer => fragment.appendChild(layer.group));
+            this.editorSVG.appendChild(fragment);
             this.renderLayers();
         }
 
@@ -412,135 +398,188 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         startDrag(e, layerId) {
-            if (e.button !== 0) return;
-
             const layerElement = this.layersPanel.querySelector(`[data-layer-id="${layerId}"]`);
             if (!layerElement) return;
 
-            e.stopPropagation();
             e.preventDefault();
 
             const rect = layerElement.getBoundingClientRect();
 
             const placeholder = document.createElement('div');
             placeholder.className = 'layer-placeholder';
+
             placeholder.style.height = `${rect.height}px`;
-            placeholder.style.visibility = 'hidden';
 
             layerElement.parentNode.insertBefore(placeholder, layerElement.nextSibling);
 
-            layerElement.style.position = 'absolute';
-            layerElement.style.width = `${rect.width}px`;
-            layerElement.style.left = `${rect.left}px`;
-            layerElement.style.top = `${rect.top}px`;
-            layerElement.style.zIndex = '1000';
-            layerElement.classList.add('dragging');
+            layerElement.style.setProperty('--drag-width', `${rect.width}px`);
 
+            const computedStyle = window.getComputedStyle(layerElement);
+            const originalBg = computedStyle.backgroundColor;
+
+            if (originalBg === 'rgba(0, 0, 0, 0)' || originalBg === 'transparent') {
+                layerElement.style.backgroundColor = 'var(--secondary-color)';
+            } else {
+                layerElement.style.backgroundColor = originalBg;
+            }
+
+            layerElement.classList.add('dragging');
             document.body.appendChild(layerElement);
+
+            const offsetY = e.clientY - rect.top;
+
+            layerElement.style.top = `${rect.top}px`;
+            layerElement.style.left = `${rect.left}px`;
 
             this.dragState = {
                 draggedElement: layerElement,
-                placeholder,
-                startY: e.clientY,
-                startTop: rect.top,
-                layerId,
+                placeholder: placeholder,
+                offsetY: offsetY,
+                layerId: layerId,
                 initialIndex: this.layers.findIndex(l => l.id === layerId)
             };
 
-            document.addEventListener('mousemove', this.onDragMove.bind(this));
-            document.addEventListener('mouseup', this.onDragEnd.bind(this));
+            this.boundDragMove = this.onDragMove.bind(this);
+            this.boundDragEnd = this.onDragEnd.bind(this);
+
+            document.addEventListener('mousemove', this.boundDragMove);
+            document.addEventListener('mouseup', this.boundDragEnd);
         }
 
         onDragMove(e) {
             if (!this.dragState) return;
+            const { draggedElement, offsetY } = this.dragState;
 
-            const deltaY = e.clientY - this.dragState.startY;
-            this.dragState.draggedElement.style.top = `${this.dragState.startTop + deltaY}px`;
+            draggedElement.style.top = `${e.clientY - offsetY}px`;
 
             this.updatePlaceholderPosition(e.clientY);
         }
 
         updatePlaceholderPosition(mouseY) {
-            const items = this.layersPanel.querySelectorAll('.layer-item');
-            let insertBefore = null;
+            const placeholder = this.dragState.placeholder;
+            const items = Array.from(this.layersPanel.querySelectorAll('.layer-item:not(.dragging)'));
 
+            let insertBefore = null;
             for (const item of items) {
                 const rect = item.getBoundingClientRect();
-                if (mouseY < rect.top + rect.height / 2) {
+                const middle = rect.top + rect.height / 2;
+                if (mouseY < middle) {
                     insertBefore = item;
                     break;
                 }
             }
 
-            const currentInsertBefore = this.dragState.placeholder.nextSibling;
+            const currentNextSibling = placeholder.nextElementSibling;
+            if (insertBefore === currentNextSibling) return;
 
-            if (insertBefore === currentInsertBefore) return;
+            const siblings = Array.from(this.layersPanel.children).filter(el => el !== placeholder);
+            const positions = new Map();
+            siblings.forEach(el => positions.set(el, el.getBoundingClientRect().top));
 
-            const oldRects = new Map();
-            for (const item of items) {
-                oldRects.set(item, item.getBoundingClientRect());
+            if (insertBefore) {
+                this.layersPanel.insertBefore(placeholder, insertBefore);
+            } else {
+                this.layersPanel.appendChild(placeholder);
             }
 
-            this.layersPanel.insertBefore(this.dragState.placeholder, insertBefore);
+            siblings.forEach(el => {
+                const newTop = el.getBoundingClientRect().top;
+                const oldTop = positions.get(el);
+                const delta = oldTop - newTop;
+                if (delta !== 0) {
+                    el.style.transition = 'none';
+                    el.style.transform = `translateY(${delta}px)`;
+                }
+            });
 
             requestAnimationFrame(() => {
-                for (const item of items) {
-                    const oldRect = oldRects.get(item);
-                    const newRect = item.getBoundingClientRect();
-                    const deltaX = oldRect.left - newRect.left;
-                    const deltaY = oldRect.top - newRect.top;
-
-                    item.style.transition = 'none';
-                    item.style.transform = `translate(${deltaX}px, ${deltaY}px)`;
-
-                    requestAnimationFrame(() => {
-                        item.style.transition = '';
-                        item.style.transform = '';
-                    });
-                }
+                siblings.forEach(el => {
+                    if (el.style.transform) {
+                        el.offsetHeight;
+                        el.style.transition = '';
+                        el.style.transform = '';
+                    }
+                });
             });
         }
 
         onDragEnd(e) {
             if (!this.dragState) return;
 
-            document.removeEventListener('mousemove', this.onDragMove.bind(this));
-            document.removeEventListener('mouseup', this.onDragEnd.bind(this));
+            document.removeEventListener('mousemove', this.boundDragMove);
+            document.removeEventListener('mouseup', this.boundDragEnd);
+            this.boundDragMove = null;
+            this.boundDragEnd = null;
 
-            const placeholderDomIndex = Array.from(this.layersPanel.children).indexOf(this.dragState.placeholder);
-            const newIndex = this.layers.length - 1 - placeholderDomIndex;
+            const { draggedElement, placeholder, layerId, initialIndex } = this.dragState;
+            const destRect = placeholder.getBoundingClientRect();
 
-            const initialIndex = this.dragState.initialIndex;
-            const layer = this.layers[initialIndex];
+            draggedElement.style.boxShadow = '0 8px 20px rgba(0,0,0,0.3), 0 0 0 1px rgba(255,255,255,0.1)';
+            draggedElement.style.borderColor = 'var(--accent-primary)';
 
-            this.layers.splice(initialIndex, 1);
-            this.layers.splice(newIndex, 0, layer);
+            const currentBg = window.getComputedStyle(draggedElement).backgroundColor;
+            draggedElement.style.backgroundColor = currentBg;
 
-            this.editorSVG.innerHTML = '';
-            this.layers.forEach(layer => {
-                this.editorSVG.appendChild(layer.group);
+            draggedElement.classList.remove('dragging');
+            draggedElement.classList.add('dropping');
+
+            void draggedElement.offsetWidth;
+
+            const onAnimationComplete = (evt) => {
+                if (evt && evt.propertyName !== 'top') return;
+
+                draggedElement.removeEventListener('transitionend', onAnimationComplete);
+                if (this.dragTimeout) clearTimeout(this.dragTimeout);
+
+                const children = Array.from(this.layersPanel.children);
+                const placeholderIndex = children.indexOf(placeholder);
+
+                if (placeholderIndex === -1) {
+                    this.renderLayers();
+                    if (draggedElement.parentNode) draggedElement.remove();
+                    if (placeholder.parentNode) placeholder.remove();
+                    this.dragState = null;
+                    return;
+                }
+
+                const layerCount = this.layers.length;
+                const newIndex = layerCount - 1 - placeholderIndex;
+                const layerToMove = this.layers[initialIndex];
+                this.layers.splice(initialIndex, 1);
+                this.layers.splice(newIndex, 0, layerToMove);
+
+                const fragment = document.createDocumentFragment();
+                this.layers.forEach(layer => fragment.appendChild(layer.group));
+                this.editorSVG.appendChild(fragment);
+
+                draggedElement.remove();
+                placeholder.remove();
+                this.dragState = null;
+
+                this.renderLayers();
+                this.selectLayer(layerId);
+            };
+
+            draggedElement.addEventListener('transitionend', onAnimationComplete);
+
+            requestAnimationFrame(() => {
+                requestAnimationFrame(() => {
+                    draggedElement.style.top = `${destRect.top}px`;
+                    draggedElement.style.left = `${destRect.left}px`;
+
+                    draggedElement.style.boxShadow = '0 0 0 rgba(0,0,0,0)';
+                    draggedElement.style.borderColor = 'transparent';
+                    draggedElement.style.backgroundColor = '';
+                });
             });
 
-            this.dragState.placeholder.remove();
-            this.dragState.draggedElement.remove();
-
-            this.dragState.draggedElement.style.position = '';
-            this.dragState.draggedElement.style.width = '';
-            this.dragState.draggedElement.style.left = '';
-            this.dragState.draggedElement.style.top = '';
-            this.dragState.draggedElement.style.zIndex = '';
-            this.dragState.draggedElement.style.transform = '';
-            this.dragState.draggedElement.classList.remove('dragging');
-
-            this.renderLayers();
-            this.selectLayer(this.dragState.layerId);
-
-            this.dragState = null;
+            this.dragTimeout = setTimeout(() => {
+                if (this.dragState) onAnimationComplete();
+            }, 450);
         }
 
         renderLayers() {
             this.layersPanel.innerHTML = '';
-
             [...this.layers].reverse().forEach(layer => {
                 const layerElement = document.createElement('div');
                 layerElement.className = `layer-item ${layer.selected ? 'active' : ''} ${!layer.visible ? 'is-hidden' : ''} ${this.editingLayerId === layer.id ? 'is-editing' : ''}`;
@@ -550,133 +589,111 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 if (this.editingLayerId === layer.id) {
                     layerElement.innerHTML = `
-                        <div class="layer-info">
-                            <svg class="layer-type-icon" viewBox="0 0 24 24">${this.getLayerIcon(elementType)}</svg>
-                            <span class="layer-name-editable" contenteditable="true" data-maxlength="30">${layer.name}</span>
-                            <div class="edit-controls">
-                                <button class="edit-confirm" title="Confirm">
-                                    <svg viewBox="0 0 24 24" width="16" height="16"><path fill="currentColor" d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>
-                                </button>
-                                <button class="edit-cancel" title="Cancel">
-                                    <svg viewBox="0 0 24 24" width="16" height="16"><path fill="currentColor" d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
-                                </button>
-                            </div>
+                    <div class="layer-info">
+                        <svg class="layer-type-icon" viewBox="0 0 24 24">${this.getLayerIcon(elementType)}</svg>
+                        <span class="layer-name-editable" contenteditable="true" data-maxlength="30">${layer.name}</span>
+                        <div class="edit-controls">
+                            <button class="edit-confirm" title="Confirm"><svg viewBox="0 0 24 24" width="16" height="16"><path fill="currentColor" d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg></button>
+                            <button class="edit-cancel" title="Cancel"><svg viewBox="0 0 24 24" width="16" height="16"><path fill="currentColor" d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg></button>
                         </div>
-                        <div class="layer-visibility-toggle" style="visibility: hidden;">
-                            <svg class="icon-visible" viewBox="0 0 24 24"><path fill="currentColor" d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"></path></svg>
-                            <svg class="icon-hidden" viewBox="0 0 24 24"><path fill="currentColor" d="M12 7c2.76 0 5 2.24 5 5 0 .65-.13 1.26-.36 1.83l2.92 2.92c1.51-1.26 2.7-2.89 3.43-4.75-1.73-4.39-6-7.5-11-7.5-1.4 0-2.74.25-3.98.7l2.16 2.16C10.74 7.13 11.35 7 12 7zM2 4.27l2.28 2.28.46.46C3.08 8.3 1.78 10.02 1 12c1.73 4.39 6 7.5 11 7.5 1.55 0 3.03-.3 4.38-.84l.42.42L19.73 22 21 20.73 3.27 3 2 4.27zM7.53 9.8l1.55 1.55c-.05.21-.08.43-.08.65 0 1.66 1.34 3 3 3 .22 0 .44-.03.65-.08l1.55 1.55c-.67.33-1.41.53-2.2.53-2.76 0-5-2.24-5-5 0-.79.2-1.53.53-2.2zm4.31-.78l3.15 3.15.02-.16c0-1.66-1.34-3-3-3l-.17.01z"></path></svg>
-                        </div>
-                    `;
+                    </div>`;
 
                     const editableElement = layerElement.querySelector('.layer-name-editable');
                     const confirmBtn = layerElement.querySelector('.edit-confirm');
                     const cancelBtn = layerElement.querySelector('.edit-cancel');
-
                     const originalName = layer.name;
 
                     editableElement.addEventListener('keydown', (e) => {
-                        if (e.key === 'Enter') {
-                            e.preventDefault();
-                            confirmBtn.click();
-                        } else if (e.key === 'Escape') {
-                            e.preventDefault();
-                            editableElement.textContent = originalName;
-                            cancelBtn.click();
-                        }
-
+                        if (e.key === 'Enter') { e.preventDefault(); confirmBtn.click(); }
+                        else if (e.key === 'Escape') { e.preventDefault(); editableElement.textContent = originalName; cancelBtn.click(); }
                         e.stopPropagation();
                     });
-
-                    editableElement.addEventListener('paste', (e) => {
-                        e.preventDefault();
-                        const text = e.clipboardData.getData('text/plain').slice(0, 30);
-                        document.execCommand('insertText', false, text);
-                        e.stopPropagation();
-                    });
-
-                    editableElement.addEventListener('input', (e) => {
-                        if (editableElement.textContent.length > 30) {
-                            editableElement.textContent = editableElement.textContent.slice(0, 30);
-                            const selection = window.getSelection();
-                            const range = document.createRange();
-                            range.selectNodeContents(editableElement);
-                            range.collapse(false);
-                            selection.removeAllRanges();
-                            selection.addRange(range);
-                        }
-                        e.stopPropagation();
-                    });
-
-                    confirmBtn.addEventListener('click', (e) => {
-                        e.stopPropagation();
-                        this.confirmRename(layer.id, editableElement.textContent);
-                    });
-
-                    cancelBtn.addEventListener('click', (e) => {
-                        e.stopPropagation();
-                        editableElement.textContent = originalName;
-                        this.cancelRename();
-                    });
-
-                    const handleClickOutside = (e) => {
-                        if (!layerElement.contains(e.target)) {
-                            this.confirmRename(layer.id, editableElement.textContent);
-                            document.removeEventListener('click', handleClickOutside);
-                        }
-                    };
-
-                    setTimeout(() => {
-                        document.addEventListener('click', handleClickOutside);
-                    }, 100);
+                    confirmBtn.addEventListener('click', (e) => { e.stopPropagation(); this.confirmRename(layer.id, editableElement.textContent); });
+                    cancelBtn.addEventListener('click', (e) => { e.stopPropagation(); editableElement.textContent = originalName; this.cancelRename(); });
 
                 } else {
                     layerElement.innerHTML = `
-                        <div class="layer-info">
-                            <svg class="layer-type-icon" viewBox="0 0 24 24">${this.getLayerIcon(elementType)}</svg>
-                            <span class="layer-name">${layer.name}</span>
-                        </div>
-                        <button class="layer-visibility-toggle" title="Toggle visibility">
-                            <svg class="icon-visible" viewBox="0 0 24 24"><path fill="currentColor" d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"></path></svg>
-                            <svg class="icon-hidden" viewBox="0 0 24 24"><path fill="currentColor" d="M12 7c2.76 0 5 2.24 5 5 0 .65-.13 1.26-.36 1.83l2.92 2.92c1.51-1.26 2.7-2.89 3.43-4.75-1.73-4.39-6-7.5-11-7.5-1.4 0-2.74.25-3.98.7l2.16 2.16C10.74 7.13 11.35 7 12 7zM2 4.27l2.28 2.28.46.46C3.08 8.3 1.78 10.02 1 12c1.73 4.39 6 7.5 11 7.5 1.55 0 3.03-.3 4.38-.84l.42.42L19.73 22 21 20.73 3.27 3 2 4.27zM7.53 9.8l1.55 1.55c-.05.21-.08.43-.08.65 0 1.66 1.34 3 3 3 .22 0 .44-.03.65-.08l1.55 1.55c-.67.33-1.41.53-2.2.53-2.76 0-5-2.24-5-5 0-.79.2-1.53.53-2.2zm4.31-.78l3.15 3.15.02-.16c0-1.66-1.34-3-3-3l-.17.01z"></path></svg>
-                        </button>
-                    `;
-
-                    layerElement.addEventListener('click', (e) => {
-                        if (!e.target.closest('.layer-visibility-toggle') && !this.isEditing && !this.canceledEdit) {
-                            this.selectLayer(layer.id);
-                        }
-                    });
+                    <div class="layer-info">
+                        <svg class="layer-type-icon" viewBox="0 0 24 24">${this.getLayerIcon(elementType)}</svg>
+                        <span class="layer-name">${layer.name}</span>
+                    </div>
+                    <button class="layer-visibility-toggle" title="Toggle visibility">
+                        <svg class="icon-visible" viewBox="0 0 24 24"><path fill="currentColor" d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"></path></svg>
+                        <svg class="icon-hidden" viewBox="0 0 24 24"><path fill="currentColor" d="M12 7c2.76 0 5 2.24 5 5 0 .65-.13 1.26-.36 1.83l2.92 2.92c1.51-1.26 2.7-2.89 3.43-4.75-1.73-4.39-6-7.5-11-7.5-1.4 0-2.74.25-3.98.7l2.16 2.16C10.74 7.13 11.35 7 12 7zM2 4.27l2.28 2.28.46.46C3.08 8.3 1.78 10.02 1 12c1.73 4.39 6 7.5 11 7.5 1.55 0 3.03-.3 4.38-.84l.42.42L19.73 22 21 20.73 3.27 3 2 4.27zM7.53 9.8l1.55 1.55c-.05.21-.08.43-.08.65 0 1.66 1.34 3 3 3 .22 0 .44-.03.65-.08l1.55 1.55c-.67.33-1.41.53-2.2.53-2.76 0-5-2.24-5-5 0-.79.2-1.53.53-2.2zm4.31-.78l3.15 3.15.02-.16c0-1.66-1.34-3-3-3l-.17.01z"></path></svg>
+                    </button>`;
 
                     const visibilityBtn = layerElement.querySelector('.layer-visibility-toggle');
+                    visibilityBtn.addEventListener('mousedown', (e) => e.stopPropagation());
                     visibilityBtn.addEventListener('click', (e) => {
                         if (!this.isEditing && !this.canceledEdit) {
                             e.stopPropagation();
                             this.toggleLayerVisibility(layer.id);
                         }
                     });
-                }
 
-                if (this.editingLayerId !== layer.id && !this.isEditing && !this.canceledEdit) {
-                    layerElement.addEventListener('mousedown', (e) => {
-                        if (e.target.closest('.layer-visibility-toggle') || e.target.closest('.layer-type-icon')) return;
-                        this.startDrag(e, layer.id);
-                    });
+                    if (this.editingLayerId !== layer.id && !this.isEditing && !this.canceledEdit) {
+                        layerElement.addEventListener('mousedown', (e) => {
+                            if (e.target.closest('.layer-visibility-toggle')) return;
+                            this.handleLayerMouseDown(e, layer.id);
+                        });
+                    }
                 }
 
                 this.layersPanel.appendChild(layerElement);
             });
+        }
 
-            if (this.canceledEdit) {
-                setTimeout(() => {
-                    this.canceledEdit = false;
-                }, 0);
+        handleLayerMouseDown(e, layerId) {
+            if (e.button !== 0) return;
+
+            this.pendingDragState = {
+                layerId: layerId,
+                startX: e.clientX,
+                startY: e.clientY,
+                hasMoved: false
+            };
+
+            this.boundMonitorDrag = this.monitorDragThreshold.bind(this);
+            this.boundCancelDragMonitor = this.onPendingMouseUp.bind(this);
+
+            document.addEventListener('mousemove', this.boundMonitorDrag);
+            document.addEventListener('mouseup', this.boundCancelDragMonitor);
+        }
+
+        monitorDragThreshold(e) {
+            if (!this.pendingDragState) return;
+
+            const dx = e.clientX - this.pendingDragState.startX;
+            const dy = e.clientY - this.pendingDragState.startY;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+
+            if (distance > 5) {
+                this.pendingDragState.hasMoved = true;
+
+                document.removeEventListener('mousemove', this.boundMonitorDrag);
+                document.removeEventListener('mouseup', this.boundCancelDragMonitor);
+
+                this.startDrag(e, this.pendingDragState.layerId);
+                this.pendingDragState = null;
             }
+        }
+
+        onPendingMouseUp(e) {
+            if (!this.pendingDragState) return;
+
+            document.removeEventListener('mousemove', this.boundMonitorDrag);
+            document.removeEventListener('mouseup', this.boundCancelDragMonitor);
+
+            if (!this.pendingDragState.hasMoved) {
+                this.selectLayer(this.pendingDragState.layerId);
+            }
+
+            this.pendingDragState = null;
         }
 
         getLayerElementType(layer) {
             const elements = layer.group.children;
             if (elements.length === 0) return 'empty';
-
             const types = new Set();
             for (let element of elements) {
                 if (element.getAttribute('data-resize-wrapper') === '1') {
@@ -686,7 +703,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     types.add(element.tagName.toLowerCase());
                 }
             }
-
             if (types.size === 1) return types.values().next().value;
             return 'mixed';
         }
@@ -701,7 +717,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 'empty': '<path d="M19 5v14H5V5h14m0-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2z" fill="currentColor"/>',
                 'mixed': '<path d="M4 6h16v2H4zm0 4h16v2H4zm0 4h16v2H4zm0 4h16v2H4z" fill="currentColor"/>'
             };
-
             return icons[type] || icons['empty'];
         }
     }
