@@ -23,16 +23,14 @@ document.addEventListener('DOMContentLoaded', () => {
     const state = {
         currentTool: 'select',
         selectedElement: null,
+        selectedElements: [],
         activeContextMenu: null,
         isDrawing: false,
         isDragging: false,
         isPanning: false,
         isSpacePressed: false,
         startPoint: { x: 0, y: 0 },
-        dragContext: {
-            initialTx: 0,
-            initialTy: 0,
-        },
+        dragContext: null,
         panContext: {
             startViewBox: null,
             startMouse: null
@@ -54,6 +52,7 @@ document.addEventListener('DOMContentLoaded', () => {
         pathStep: 0,
         curvePoints: { p1: null, p2: null },
         selectionBox: null,
+        resizeHandles: [],
         filePath: null,
         zoom: 1,
         baseViewBox: null,
@@ -582,7 +581,10 @@ document.addEventListener('DOMContentLoaded', () => {
             this.layersPanel.innerHTML = '';
             [...this.layers].reverse().forEach(layer => {
                 const layerElement = document.createElement('div');
-                layerElement.className = `layer-item ${layer.selected ? 'active' : ''} ${!layer.visible ? 'is-hidden' : ''} ${this.editingLayerId === layer.id ? 'is-editing' : ''}`;
+                
+                const hasSelectedElements = state.selectedElements.some(el => layer.group.contains(el));
+
+                layerElement.className = `layer-item ${layer.selected ? 'active' : ''} ${!layer.visible ? 'is-hidden' : ''} ${this.editingLayerId === layer.id ? 'is-editing' : ''} ${hasSelectedElements ? 'is-element-selected' : ''}`;
                 layerElement.setAttribute('data-layer-id', layer.id);
 
                 const elementType = this.getLayerElementType(layer);
@@ -633,7 +635,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                     if (this.editingLayerId !== layer.id && !this.isEditing && !this.canceledEdit) {
                         layerElement.addEventListener('mousedown', (e) => {
-                            if (e.target.closest('.layer-visibility-toggle')) return;
+                            if (e.button !== 0 || e.target.closest('.layer-visibility-toggle')) return;
                             this.handleLayerMouseDown(e, layer.id);
                         });
                     }
@@ -672,6 +674,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 document.removeEventListener('mousemove', this.boundMonitorDrag);
                 document.removeEventListener('mouseup', this.boundCancelDragMonitor);
+                
+                this.selectLayer(this.pendingDragState.layerId); 
 
                 this.startDrag(e, this.pendingDragState.layerId);
                 this.pendingDragState = null;
@@ -721,6 +725,22 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    function getLayerElementType(layer) {
+        const elements = layer.group.children;
+        if (elements.length === 0) return 'empty';
+        const types = new Set();
+        for (let element of elements) {
+            if (element.getAttribute('data-resize-wrapper') === '1') {
+                const child = element.firstElementChild;
+                if (child) types.add(child.tagName.toLowerCase());
+            } else {
+                types.add(element.tagName.toLowerCase());
+            }
+        }
+        if (types.size === 1) return types.values().next().value;
+        return 'mixed';
+    }
+
     function init() {
         setupToolbox();
         setupCanvasListeners();
@@ -750,7 +770,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
             overlaySVG = document.getElementById('editor-overlay');
             if (!overlaySVG) throw new Error("Could not find overlay SVG element after load.");
-
             overlaySVG.setAttribute('viewBox', editorSVG.getAttribute('viewBox'));
             overlaySVG.setAttribute('preserveAspectRatio', editorSVG.getAttribute('preserveAspectRatio') || 'xMinYMin meet');
             overlaySVG.style.cssText = `
@@ -952,24 +971,27 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             }
 
-            if (state.selectedElement) {
-                const target = getTargetElement(state.selectedElement);
-                if (!target) return;
+            if (state.selectedElements.length > 0) {
+                state.selectedElements.forEach(wrapper => {
+                    const target = getTargetElement(wrapper);
+                    if (!target) return;
 
-                switch (id) {
-                    case 'prop-fill':
-                        applyPropertyToTarget(target, 'fill', value);
-                        state.defaults.fill = value;
-                        break;
-                    case 'prop-stroke':
-                        applyPropertyToTarget(target, 'stroke', value);
-                        state.defaults.stroke = value;
-                        break;
-                    case 'prop-stroke-width':
-                        applyPropertyToTarget(target, 'stroke-width', value);
-                        state.defaults.strokeWidth = value;
-                        break;
-                }
+                    switch (id) {
+                        case 'prop-fill':
+                            applyPropertyToTarget(target, 'fill', value);
+                            break;
+                        case 'prop-stroke':
+                            applyPropertyToTarget(target, 'stroke', value);
+                            break;
+                        case 'prop-stroke-width':
+                            applyPropertyToTarget(target, 'stroke-width', value);
+                            break;
+                    }
+                });
+                
+                if(id === 'prop-fill') state.defaults.fill = value;
+                if(id === 'prop-stroke') state.defaults.stroke = value;
+                if(id === 'prop-stroke-width') state.defaults.strokeWidth = value;
 
                 updateSelectionOverlay();
                 extractAndBuildPalette();
@@ -993,8 +1015,8 @@ document.addEventListener('DOMContentLoaded', () => {
     function updatePropertiesForSelection() {
         propertiesPanel.style.opacity = '1';
 
-        const wrapper = state.selectedElement;
-        const target = getTargetElement(wrapper);
+        const wrapper = state.selectedElement; 
+        const target = wrapper ? getTargetElement(wrapper) : null;
 
         if (target) {
             let fill = getComputedStyle(target).fill || '';
@@ -1015,28 +1037,63 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    function selectElement(element) {
-        if (state.selectedElement === element) return;
-        deselectElement();
-
+    function selectElement(element, multiSelect = false) {
         const wrapper = ensureWrapper(element);
-        state.selectedElement = wrapper;
+        
+        const targetLayer = state.layerManager.getLayerForElement(wrapper);
+        
+        const currentLayer = state.selectedElements.length > 0 
+            ? state.layerManager.getLayerForElement(state.selectedElements[0]) 
+            : null;
 
-        wrapper.classList.add('selected');
-        createSelectionBox(wrapper);
-        setupContextMenu(wrapper);
+        if (multiSelect && currentLayer && targetLayer !== currentLayer) {
+            return; 
+        }
+
+        if (multiSelect) {
+            const index = state.selectedElements.indexOf(wrapper);
+            if (index > -1) {
+                wrapper.classList.remove('selected');
+                state.selectedElements.splice(index, 1);
+                
+                if (state.selectedElement === wrapper) {
+                    state.selectedElement = state.selectedElements.length > 0 
+                        ? state.selectedElements[state.selectedElements.length - 1] 
+                        : null;
+                }
+            } else {
+                state.selectedElements.push(wrapper);
+                wrapper.classList.add('selected');
+                state.selectedElement = wrapper;
+            }
+        } else {
+            deselectElement(); 
+            state.selectedElements = [wrapper];
+            state.selectedElement = wrapper;
+            wrapper.classList.add('selected');
+        }
+
+        if (state.selectedElements.length === 0) {
+            deselectElement();
+            return;
+        }
+        
+        updateSelectionOverlay();
+        setupContextMenu(state.selectedElement); 
         updatePropertiesForSelection();
     }
 
     function deselectElement() {
         if (state.activeContextMenu) state.activeContextMenu.destroy();
         if (state.selectionBox) state.selectionBox.remove();
-        if (state.selectedElement) state.selectedElement.classList.remove('selected');
         if (state.resizeHandles) {
             state.resizeHandles.forEach(h => h.remove());
             state.resizeHandles = null;
         }
 
+        state.selectedElements.forEach(el => el.classList.remove('selected'));
+        state.selectedElements = [];
+        
         state.selectedElement = null;
         state.selectionBox = null;
         state.activeContextMenu = null;
@@ -1045,40 +1102,19 @@ document.addEventListener('DOMContentLoaded', () => {
         state.smartGuides.guides = { v: [], h: [] };
         state.smartGuides.baseAxes = null;
     }
+    
+    function createResizeHandles() {
+        if (state.resizeHandles && state.resizeHandles.length > 0) return;
 
-    function createSelectionBox(element) {
-        if (state.selectionBox) state.selectionBox.remove();
-        if (state.resizeHandles) {
-            state.resizeHandles.forEach(h => h.remove());
-            state.resizeHandles = null;
-        }
-
-        state.selectionBox = document.createElementNS(SVG_NS, 'polygon');
-        state.selectionBox.setAttribute('fill', 'none');
-        state.selectionBox.setAttribute('stroke', 'var(--accent-primary)');
-        state.selectionBox.setAttribute('stroke-width', '1');
-        state.selectionBox.setAttribute('stroke-dasharray', '4 2');
-        state.selectionBox.style.pointerEvents = 'none';
-
-        overlaySVG.appendChild(state.selectionBox);
-
-        createResizeHandles(element.getBBox(), '');
-        updateSelectionOverlay();
-    }
-
-    function createResizeHandles(bbox, wrapperTransform) {
         const corners = [0, 1, 2, 3];
         state.resizeHandles = [];
 
         corners.forEach((_, i) => {
             const handle = document.createElementNS(SVG_NS, 'circle');
-            handle.setAttribute('cx', 0);
-            handle.setAttribute('cy', 0);
             handle.setAttribute('r', 6);
             handle.setAttribute('fill', '#fff');
             handle.setAttribute('stroke', 'var(--accent-primary)');
             handle.setAttribute('stroke-width', '1');
-            handle.setAttribute('vector-effect', 'non-scaling-stroke');
             handle.setAttribute('data-resize-handle', i.toString());
             handle.style.cursor = getCursorForDirection(['nw', 'ne', 'se', 'sw'][i]);
             handle.style.pointerEvents = 'all';
@@ -1089,7 +1125,11 @@ document.addEventListener('DOMContentLoaded', () => {
             state.resizeHandles.push(handle);
         });
 
-        updateHandlesWorld(state.selectedElement);
+        updateHandlesWorld(null, state.selectionBox ? { 
+            x: parseFloat(state.selectionBox.getAttribute('points').split(' ')[0].split(',')[0]),
+            y: parseFloat(state.selectionBox.getAttribute('points').split(' ')[0].split(',')[1]),
+            width: 0, height: 0
+        } : null);
     }
 
     function getCursorForDirection(dir) {
@@ -1106,23 +1146,52 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function updateSelectionOverlay() {
-        const wrapper = state.selectedElement;
-        if (!wrapper) return;
-
-        const bbox = wrapper.getBBox();
-
-        const tl = localToOverlay(wrapper, bbox.x, bbox.y);
-        const tr = localToOverlay(wrapper, bbox.x + bbox.width, bbox.y);
-        const br = localToOverlay(wrapper, bbox.x + bbox.width, bbox.y + bbox.height);
-        const bl = localToOverlay(wrapper, bbox.x, bbox.y + bbox.height);
-
-        if (state.selectionBox) {
-            const pts = `${tl.x},${tl.y} ${tr.x},${tr.y} ${br.x},${br.y} ${bl.x},${bl.y}`;
-            state.selectionBox.setAttribute('points', pts);
-            state.selectionBox.removeAttribute('transform');
+        if (state.selectionBox) state.selectionBox.remove();
+        if (state.resizeHandles) {
+            state.resizeHandles.forEach(h => h.remove());
+            state.resizeHandles = null;
         }
 
-        updateHandlesWorld(wrapper);
+        if (state.selectedElements.length === 0) return;
+
+        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+        
+        state.selectedElements.forEach(el => {
+            const bbox = el.getBBox();
+            if (!isFinite(bbox.x)) return;
+            
+            const corners = [
+                localToOverlay(el, bbox.x, bbox.y),
+                localToOverlay(el, bbox.x + bbox.width, bbox.y),
+                localToOverlay(el, bbox.x + bbox.width, bbox.y + bbox.height),
+                localToOverlay(el, bbox.x, bbox.y + bbox.height)
+            ];
+            corners.forEach(p => {
+                if (p.x < minX) minX = p.x;
+                if (p.x > maxX) maxX = p.x;
+                if (p.y < minY) minY = p.y;
+                if (p.y > maxY) maxY = p.y;
+            });
+        });
+
+        if (minX === Infinity) return;
+
+        const width = maxX - minX;
+        const height = maxY - minY;
+
+        state.selectionBox = document.createElementNS(SVG_NS, 'polygon');
+        state.selectionBox.setAttribute('fill', 'none');
+        state.selectionBox.setAttribute('stroke', 'var(--accent-primary)');
+        state.selectionBox.setAttribute('stroke-width', '1');
+        state.selectionBox.setAttribute('stroke-dasharray', '4 2');
+        state.selectionBox.style.pointerEvents = 'none';
+        overlaySVG.appendChild(state.selectionBox);
+
+        const pts = `${minX},${minY} ${maxX},${minY} ${maxX},${maxY} ${minX},${maxY}`;
+        state.selectionBox.setAttribute('points', pts);
+
+        createResizeHandles(); 
+        updateHandlesWorld(null, { x: minX, y: minY, width: width, height: height });
     }
 
     function localToOverlay(el, x, y) {
@@ -1148,20 +1217,32 @@ document.addEventListener('DOMContentLoaded', () => {
         return { x, y };
     }
 
-    function updateHandlesWorld(wrapper) {
-        if (!state.resizeHandles || !state.resizeHandles.length || !wrapper) return;
-        const bbox = wrapper.getBBox();
+    function updateHandlesWorld(wrapper, overrideRect = null) {
+        if (!state.resizeHandles || !state.resizeHandles.length) return;
+        
+        let tl, tr, bl, br;
 
-        const corners = [
-            localToOverlay(wrapper, bbox.x, bbox.y),
-            localToOverlay(wrapper, bbox.x + bbox.width, bbox.y),
-            localToOverlay(wrapper, bbox.x, bbox.y + bbox.height),
-            localToOverlay(wrapper, bbox.x + bbox.width, bbox.y + bbox.height),
-        ];
+        if (overrideRect) {
+            const { x, y, width, height } = overrideRect;
+            tl = { x: x, y: y };
+            tr = { x: x + width, y: y };
+            bl = { x: x, y: y + height };
+            br = { x: x + width, y: y + height };
+        } else if (wrapper) {
+            const bbox = wrapper.getBBox();
+            tl = localToOverlay(wrapper, bbox.x, bbox.y);
+            tr = localToOverlay(wrapper, bbox.x + bbox.width, bbox.y);
+            bl = localToOverlay(wrapper, bbox.x, bbox.y + bbox.height);
+            br = localToOverlay(wrapper, bbox.x + bbox.width, bbox.y + bbox.height);
+        } else {
+            return;
+        }
+
+        const coords = [tl, tr, bl, br];
 
         state.resizeHandles.forEach((handle, i) => {
-            handle.setAttribute('cx', corners[i].x);
-            handle.setAttribute('cy', corners[i].y);
+            handle.setAttribute('cx', coords[i].x);
+            handle.setAttribute('cy', coords[i].y);
             handle.removeAttribute('transform');
         });
     }
@@ -1213,33 +1294,56 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function startResizing(e, handleIndex) {
         undoManager.recordState();
-
         e.stopPropagation();
         e.preventDefault();
+        
+        if (state.selectedElements.length === 0) return;
 
-        if (!state.selectedElement) return;
+        state.selectedElement = state.selectedElements.length === 1 ? state.selectedElements[0] : state.selectedElements[state.selectedElements.length - 1];
 
         state.isResizing = true;
         state.resizeHandleIndex = handleIndex;
+        
+        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+        state.selectedElements.forEach(el => {
+            const bbox = el.getBBox();
+            if (!isFinite(bbox.x)) return;
+            const corners = [
+                localToOverlay(el, bbox.x, bbox.y),
+                localToOverlay(el, bbox.x + bbox.width, bbox.y + bbox.height)
+            ];
+            corners.forEach(p => {
+                minX = Math.min(minX, p.x);
+                maxX = Math.max(maxX, p.x);
+                minY = Math.min(minY, p.y);
+                maxY = Math.max(maxY, p.y);
+            });
+        });
+        
+        const startBox = { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
 
-        const wrapper = state.selectedElement;
-
-        const bbox = wrapper.getBBox();
-        const base = getTransformComponents(wrapper);
-
-        const anchors = [
-            { ax: bbox.x + bbox.width, ay: bbox.y + bbox.height },
-            { ax: bbox.x, ay: bbox.y + bbox.height },
-            { ax: bbox.x + bbox.width, ay: bbox.y },
-            { ax: bbox.x, ay: bbox.y }
-        ];
-        const { ax, ay } = anchors[handleIndex];
+        let anchorX, anchorY;
+        switch (handleIndex) {
+            case 0: anchorX = maxX; anchorY = maxY; break;
+            case 1: anchorX = minX; anchorY = maxY; break;
+            case 2: anchorX = maxX; anchorY = minY; break;
+            case 3: anchorX = minX; anchorY = minY; break;
+        }
+        
+        const overlayPt = overlaySVG.createSVGPoint();
+        overlayPt.x = anchorX; overlayPt.y = anchorY;
+        const screenPt = overlayPt.matrixTransform(overlaySVG.getScreenCTM());
+        const editorAnchor = screenPt.matrixTransform(editorSVG.getScreenCTM().inverse());
 
         state.resizeContext = {
             startPoint: getSVGPoint(editorSVG, e.clientX, e.clientY),
-            startBBox: { x: bbox.x, y: bbox.y, width: bbox.width, height: bbox.height },
-            base,
-            ax, ay
+            startW: startBox.width,
+            startH: startBox.height,
+            anchor: { x: editorAnchor.x, y: editorAnchor.y },
+            items: state.selectedElements.map(el => ({
+                element: el,
+                base: getTransformComponents(el)
+            }))
         };
 
         window.addEventListener('mousemove', onResizing);
@@ -1247,49 +1351,40 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function onResizing(e) {
-        if (!state.isResizing || !state.selectedElement) return;
+        if (!state.isResizing) return;
 
-        const wrapper = state.selectedElement;
         const pt = getSVGPoint(editorSVG, e.clientX, e.clientY);
-        const { startPoint, startBBox, base, ax, ay } = state.resizeContext;
+        const ctx = state.resizeContext;
+        
+        const mouseDx = pt.x - ctx.startPoint.x;
+        const mouseDy = pt.y - ctx.startPoint.y;
 
-        const dxWorld = pt.x - startPoint.x;
-        const dyWorld = pt.y - startPoint.y;
-        const localDx = dxWorld / (base.sx || 1);
-        const localDy = dyWorld / (base.sy || 1);
+        let diffX = mouseDx;
+        let diffY = mouseDy;
+        
+        if (state.resizeHandleIndex === 0 || state.resizeHandleIndex === 2) diffX = -mouseDx;
+        if (state.resizeHandleIndex === 0 || state.resizeHandleIndex === 1) diffY = -mouseDy;
 
-        let newX = startBBox.x;
-        let newY = startBBox.y;
-        let newW = startBBox.width;
-        let newH = startBBox.height;
+        const finalW = Math.max(1, ctx.startW + diffX); 
+        const finalH = Math.max(1, ctx.startH + diffY);
 
-        switch (state.resizeHandleIndex) {
-            case 0:
-                newX += localDx; newY += localDy; newW -= localDx; newH -= localDy; break;
-            case 1:
-                newY += localDy; newW += localDx; newH -= localDy; break;
-            case 2:
-                newX += localDx; newW -= localDx; newH += localDy; break;
-            case 3:
-                newW += localDx; newH += localDy; break;
-        }
+        const scaleX = finalW / ctx.startW;
+        const scaleY = finalH / ctx.startH;
 
-        const min = 1e-3;
-        if (Math.abs(newW) < min) newW = (newW < 0 ? -min : min);
-        if (Math.abs(newH) < min) newH = (newH < 0 ? -min : min);
+        ctx.items.forEach(item => {
+            const newTx = ctx.anchor.x + (item.base.tx - ctx.anchor.x) * scaleX;
+            const newTy = ctx.anchor.y + (item.base.ty - ctx.anchor.y) * scaleY;
 
-        const sx = newW / startBBox.width;
-        const sy = newH / startBBox.height;
+            const newSx = item.base.sx * scaleX;
+            const newSy = item.base.sy * scaleY;
 
-        setTransform(wrapper, {
-            tx: base.tx,
-            ty: base.ty,
-            sx: base.sx * sx,
-            sy: base.sy * sy,
-            ax, ay
+            setTransform(item.element, {
+                tx: newTx,
+                ty: newTy,
+                sx: newSx,
+                sy: newSy
+            });
         });
-
-        state.resizeContext.lastBox = { x: newX, y: newY, width: newW, height: newH };
 
         updateSelectionOverlay();
     }
@@ -1297,112 +1392,13 @@ document.addEventListener('DOMContentLoaded', () => {
     function stopResizing() {
         if (!state.isResizing) return;
         state.isResizing = false;
+        state.resizeContext = null;
+        state.resizeHandleIndex = null;
 
-        const wrapper = state.selectedElement;
-        const ctx = state.resizeContext;
         window.removeEventListener('mousemove', onResizing);
         window.removeEventListener('mouseup', stopResizing);
-
-        if (!wrapper || !ctx) {
-            state.resizeHandleIndex = null;
-            state.resizeContext = null;
-            return;
-        }
-
-        const target =
-            wrapper.tagName.toLowerCase() === 'g' && wrapper.dataset.resizeWrapper === '1'
-                ? (wrapper.firstElementChild || wrapper)
-                : wrapper;
-
-        const tag = target.tagName.toLowerCase();
-        const isPrimitive = (tag === 'rect' || tag === 'ellipse' || tag === 'line' || tag === 'circle');
-
-        if (isPrimitive && ctx.lastBox) {
-            applyResize(ctx.lastBox.x, ctx.lastBox.y, ctx.lastBox.width, ctx.lastBox.height);
-
-            setTransform(wrapper, {
-                tx: ctx.base.tx,
-                ty: ctx.base.ty,
-                sx: ctx.base.sx,
-                sy: ctx.base.sy
-            });
-        }
-
+        
         updateSelectionOverlay();
-
-        state.resizeHandleIndex = null;
-        state.resizeContext = null;
-    }
-
-    function applyResize(x, y, w, h) {
-        if (w < 1) w = 1;
-        if (h < 1) h = 1;
-
-        const target =
-            state.selectedElement.tagName.toLowerCase() === 'g' && state.selectedElement.dataset.resizeWrapper === '1'
-                ? state.selectedElement.firstElementChild || state.selectedElement
-                : state.selectedElement;
-
-        switch (target.tagName) {
-            case 'rect':
-                target.setAttribute('x', x);
-                target.setAttribute('y', y);
-                target.setAttribute('width', w);
-                target.setAttribute('height', h);
-                break;
-            case 'ellipse':
-                target.setAttribute('cx', x + w / 2);
-                target.setAttribute('cy', y + h / 2);
-                target.setAttribute('rx', w / 2);
-                target.setAttribute('ry', h / 2);
-                break;
-            case 'line':
-                target.setAttribute('x1', x);
-                target.setAttribute('y1', y);
-                target.setAttribute('x2', x + w);
-                target.setAttribute('y2', y + h);
-                break;
-            case 'circle':
-                const ellipse = document.createElementNS(SVG_NS, 'ellipse');
-
-                for (let attr of target.attributes) {
-                    ellipse.setAttribute(attr.name, attr.value);
-                }
-
-                ellipse.setAttribute('cx', x + w / 2);
-                ellipse.setAttribute('cy', y + h / 2);
-                ellipse.setAttribute('rx', w / 2);
-                ellipse.setAttribute('ry', h / 2);
-
-                ellipse.removeAttribute('r');
-
-                target.parentNode.replaceChild(ellipse, target);
-
-                if (state.selectedElement && state.selectedElement.contains(target)) {
-                    const wrapper = state.selectedElement;
-                    if (wrapper.tagName.toLowerCase() === 'g' && wrapper.dataset.resizeWrapper === '1') {
-                        wrapper.removeChild(target);
-                        wrapper.appendChild(ellipse);
-                    } else {
-                        state.selectedElement = ellipse;
-                    }
-                }
-                break;
-        }
-
-        if (state.selectionBox) {
-            const wrapper = state.selectedElement;
-            const tl = localToOverlay(wrapper, x, y);
-            const tr = localToOverlay(wrapper, x + w, y);
-            const br = localToOverlay(wrapper, x + w, y + h);
-            const bl = localToOverlay(wrapper, x, y + h);
-            const pts = `${tl.x},${tl.y} ${tr.x},${tr.y} ${br.x},${br.y} ${bl.x},${bl.y}`;
-            state.selectionBox.setAttribute('points', pts);
-        }
-
-        updateHandlesWorld(state.selectedElement);
-
-        console.log(`[APPLY RESIZE] Element: ${target.tagName} → x=${x}, y=${y}, w=${w}, h=${h}`);
     }
 
     function setupSmartGuidesUI() {
@@ -1540,7 +1536,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const guidesV = state.smartGuides.guides.v || [];
         const guidesH = state.smartGuides.guides.h || [];
-        const base = state.dragContext.base || { sx: 1, sy: 1 };
+        
+        const base = state.dragContext.base || { sx: 1, sy: 1 }; 
         const sx = Math.abs(base.sx || 1);
         const sy = Math.abs(base.sy || 1);
 
@@ -1636,10 +1633,10 @@ document.addEventListener('DOMContentLoaded', () => {
             };
         }
 
-        if (element) {
+        if (state.selectedElements.length > 0) {
             menuItems['Delete'] = () => {
                 undoManager.recordState();
-                element.remove();
+                state.selectedElements.forEach(el => el.remove());
                 deselectElement();
                 extractAndBuildPalette();
             };
@@ -1651,6 +1648,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const layer = state.layerManager.getLayerForElement(element);
                 if (layer) {
                     layer.group.appendChild(element);
+                    updateSelectionOverlay();
                 }
             };
             menuItems['Send to back'] = () => {
@@ -1775,6 +1773,8 @@ document.addEventListener('DOMContentLoaded', () => {
     notifyClipboardState();
 
     document.addEventListener('keydown', e => {
+        const isCtrl = e.ctrlKey || e.metaKey;
+
         if (e.code === 'Space' && !state.isSpacePressed) {
             state.isSpacePressed = true;
             updateCursorStyle();
@@ -1786,7 +1786,7 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        if ((e.ctrlKey || e.metaKey) && !e.shiftKey) {
+        if (isCtrl && !e.shiftKey) {
             if (e.key === '=' || e.key === '+') {
                 e.preventDefault();
                 applyZoom(Math.min(10, state.zoom * 1.125));
@@ -1799,15 +1799,15 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
 
-        if (e.ctrlKey || e.metaKey) {
-            if (e.key === 'c' && state.selectedElement) {
+        if (isCtrl) {
+            if (e.key === 'c' && state.selectedElements.length > 0) {
                 e.preventDefault();
-                copyElement(state.selectedElement);
+                copyElement(state.selectedElements[0]); 
                 return;
             }
-            if (e.key === 'x' && state.selectedElement) {
+            if (e.key === 'x' && state.selectedElements.length > 0) {
                 e.preventDefault();
-                cutElement(state.selectedElement);
+                cutElement(state.selectedElements[0]);
                 return;
             }
             if (e.key === 'v') {
@@ -1819,9 +1819,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (state.isSpacePressed) return;
 
-        if (e.key === 'Delete' && state.selectedElement) {
+        if (e.key === 'Delete' && state.selectedElements.length > 0) {
             undoManager.recordState();
-            state.selectedElement.remove();
+            state.selectedElements.forEach(el => el.remove());
             deselectElement();
             extractAndBuildPalette();
         }
@@ -1833,7 +1833,7 @@ document.addEventListener('DOMContentLoaded', () => {
             resetPathState();
         }
 
-        if (e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return;
+        if (isCtrl || e.altKey || e.shiftKey) return;
 
         const toolButtons = document.querySelectorAll('.tool-button');
 
@@ -1861,8 +1861,11 @@ document.addEventListener('DOMContentLoaded', () => {
         canvasContainer.addEventListener('mousemove', onMouseMove);
         canvasContainer.addEventListener('mouseup', onMouseUp);
         canvasContainer.addEventListener('click', (e) => {
+            if (e.button !== 0) return;
             if (e.target === canvasContainer || e.target === editorSVG) {
-                if (state.currentTool === 'select') deselectElement();
+                if (state.currentTool === 'select' && !(e.ctrlKey || e.metaKey)) {
+                    deselectElement();
+                }
             }
         });
 
@@ -1932,9 +1935,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (e.button !== 0) return;
 
         const handleEl = e.target.closest && e.target.closest('circle[data-resize-handle]');
-        if (handleEl) {
-            return;
-        }
+        if (handleEl) return;
 
         const pt = getSVGPoint(editorSVG, e.clientX, e.clientY);
         state.startPoint = pt;
@@ -1946,22 +1947,39 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (state.currentTool === 'select') {
             const rawTarget = e.target.closest ? e.target.closest('path, rect, circle, ellipse, line, text, g') : null;
+            
             if (rawTarget && editorSVG.contains(rawTarget)) {
                 undoManager.recordState();
-
                 const wrapper = rawTarget.closest && rawTarget.closest('g[data-resize-wrapper="1"]');
-                selectElement(wrapper || rawTarget);
-                state.isDragging = true;
+                const target = wrapper || rawTarget;
 
+                const isCtrl = e.ctrlKey || e.metaKey;
+                const isAlreadySelected = state.selectedElements.includes(target);
+
+                if (isCtrl) {
+                    selectElement(target, true);
+                } else {
+                    if (!isAlreadySelected) {
+                        selectElement(target, false);
+                    }
+                }
+
+                state.isDragging = true;
                 state.dragContext = {
                     startPoint: state.startPoint,
-                    base: getTransformComponents(state.selectedElement)
+                    items: state.selectedElements.map(el => ({
+                        element: el,
+                        base: getTransformComponents(el)
+                    })),
+                    base: getTransformComponents(state.selectedElements[state.selectedElements.length - 1])
                 };
 
-                prepareSmartGuidesForDrag(state.selectedElement);
+                prepareSmartGuidesForDrag(target);
                 hideSnapLines();
             } else {
-                deselectElement();
+                if (!e.ctrlKey && !e.metaKey) {
+                    deselectElement();
+                }
             }
             return;
         }
@@ -2023,21 +2041,20 @@ document.addEventListener('DOMContentLoaded', () => {
 
         updateCursorStyle();
 
-        if (state.isDragging && state.selectedElement) {
+        if (state.isDragging && state.dragContext && state.dragContext.items) {
             const dx = pt.x - state.dragContext.startPoint.x;
             const dy = pt.y - state.dragContext.startPoint.y;
 
             const snap = applySmartSnapping(dx, dy, e.altKey);
 
-            const b = state.dragContext.base;
-            setTransform(state.selectedElement, {
-                tx: b.tx + snap.dx,
-                ty: b.ty + snap.dy,
-                sx: b.sx,
-                sy: b.sy,
+            state.dragContext.items.forEach(item => {
+                setTransform(item.element, {
+                    tx: item.base.tx + snap.dx,
+                    ty: item.base.ty + snap.dy,
+                    sx: item.base.sx,
+                    sy: item.base.sy,
+                });
             });
-
-            console.log(`[MOVE] Δx: ${dx.toFixed(2)}, Δy: ${dy.toFixed(2)} | New Tx/Ty: ${b.tx + dx}, ${b.ty + dy}`);
 
             updateSelectionOverlay();
         }
@@ -2373,20 +2390,21 @@ document.addEventListener('DOMContentLoaded', () => {
         undoManager.redo();
     });
     ipcRenderer.on('menu-delete', () => {
-        if (state.selectedElement) {
-            state.selectedElement.remove();
+        if (state.selectedElements.length > 0) {
+            undoManager.recordState();
+            state.selectedElements.forEach(el => el.remove());
             deselectElement();
             extractAndBuildPalette();
         }
     });
     ipcRenderer.on('menu-copy', () => {
-        if (state.selectedElement) {
-            copyElement(state.selectedElement);
+        if (state.selectedElements.length > 0) {
+            copyElement(state.selectedElements[0]);
         }
     });
     ipcRenderer.on('menu-cut', () => {
-        if (state.selectedElement) {
-            cutElement(state.selectedElement);
+        if (state.selectedElements.length > 0) {
+            cutElement(state.selectedElements[0]);
         }
     });
     ipcRenderer.on('menu-paste', () => {
