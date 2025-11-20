@@ -581,7 +581,7 @@ document.addEventListener('DOMContentLoaded', () => {
             this.layersPanel.innerHTML = '';
             [...this.layers].reverse().forEach(layer => {
                 const layerElement = document.createElement('div');
-                
+
                 const hasSelectedElements = state.selectedElements.some(el => layer.group.contains(el));
 
                 layerElement.className = `layer-item ${layer.selected ? 'active' : ''} ${!layer.visible ? 'is-hidden' : ''} ${this.editingLayerId === layer.id ? 'is-editing' : ''} ${hasSelectedElements ? 'is-element-selected' : ''}`;
@@ -674,8 +674,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 document.removeEventListener('mousemove', this.boundMonitorDrag);
                 document.removeEventListener('mouseup', this.boundCancelDragMonitor);
-                
-                this.selectLayer(this.pendingDragState.layerId); 
+
+                this.selectLayer(this.pendingDragState.layerId);
 
                 this.startDrag(e, this.pendingDragState.layerId);
                 this.pendingDragState = null;
@@ -988,10 +988,10 @@ document.addEventListener('DOMContentLoaded', () => {
                             break;
                     }
                 });
-                
-                if(id === 'prop-fill') state.defaults.fill = value;
-                if(id === 'prop-stroke') state.defaults.stroke = value;
-                if(id === 'prop-stroke-width') state.defaults.strokeWidth = value;
+
+                if (id === 'prop-fill') state.defaults.fill = value;
+                if (id === 'prop-stroke') state.defaults.stroke = value;
+                if (id === 'prop-stroke-width') state.defaults.strokeWidth = value;
 
                 updateSelectionOverlay();
                 extractAndBuildPalette();
@@ -1015,7 +1015,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function updatePropertiesForSelection() {
         propertiesPanel.style.opacity = '1';
 
-        const wrapper = state.selectedElement; 
+        const wrapper = state.selectedElement;
         const target = wrapper ? getTargetElement(wrapper) : null;
 
         if (target) {
@@ -1039,15 +1039,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function selectElement(element, multiSelect = false) {
         const wrapper = ensureWrapper(element);
-        
+
         const targetLayer = state.layerManager.getLayerForElement(wrapper);
-        
-        const currentLayer = state.selectedElements.length > 0 
-            ? state.layerManager.getLayerForElement(state.selectedElements[0]) 
+
+        const currentLayer = state.selectedElements.length > 0
+            ? state.layerManager.getLayerForElement(state.selectedElements[0])
             : null;
 
         if (multiSelect && currentLayer && targetLayer !== currentLayer) {
-            return; 
+            return;
         }
 
         if (multiSelect) {
@@ -1055,10 +1055,10 @@ document.addEventListener('DOMContentLoaded', () => {
             if (index > -1) {
                 wrapper.classList.remove('selected');
                 state.selectedElements.splice(index, 1);
-                
+
                 if (state.selectedElement === wrapper) {
-                    state.selectedElement = state.selectedElements.length > 0 
-                        ? state.selectedElements[state.selectedElements.length - 1] 
+                    state.selectedElement = state.selectedElements.length > 0
+                        ? state.selectedElements[state.selectedElements.length - 1]
                         : null;
                 }
             } else {
@@ -1067,7 +1067,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 state.selectedElement = wrapper;
             }
         } else {
-            deselectElement(); 
+            deselectElement();
             state.selectedElements = [wrapper];
             state.selectedElement = wrapper;
             wrapper.classList.add('selected');
@@ -1077,9 +1077,9 @@ document.addEventListener('DOMContentLoaded', () => {
             deselectElement();
             return;
         }
-        
+
         updateSelectionOverlay();
-        setupContextMenu(state.selectedElement); 
+        setupContextMenu(state.selectedElement);
         updatePropertiesForSelection();
     }
 
@@ -1093,7 +1093,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         state.selectedElements.forEach(el => el.classList.remove('selected'));
         state.selectedElements = [];
-        
+
         state.selectedElement = null;
         state.selectionBox = null;
         state.activeContextMenu = null;
@@ -1102,7 +1102,7 @@ document.addEventListener('DOMContentLoaded', () => {
         state.smartGuides.guides = { v: [], h: [] };
         state.smartGuides.baseAxes = null;
     }
-    
+
     function createResizeHandles() {
         if (state.resizeHandles && state.resizeHandles.length > 0) return;
 
@@ -1125,7 +1125,7 @@ document.addEventListener('DOMContentLoaded', () => {
             state.resizeHandles.push(handle);
         });
 
-        updateHandlesWorld(null, state.selectionBox ? { 
+        updateHandlesWorld(null, state.selectionBox ? {
             x: parseFloat(state.selectionBox.getAttribute('points').split(' ')[0].split(',')[0]),
             y: parseFloat(state.selectionBox.getAttribute('points').split(' ')[0].split(',')[1]),
             width: 0, height: 0
@@ -1155,11 +1155,11 @@ document.addEventListener('DOMContentLoaded', () => {
         if (state.selectedElements.length === 0) return;
 
         let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-        
+
         state.selectedElements.forEach(el => {
             const bbox = el.getBBox();
             if (!isFinite(bbox.x)) return;
-            
+
             const corners = [
                 localToOverlay(el, bbox.x, bbox.y),
                 localToOverlay(el, bbox.x + bbox.width, bbox.y),
@@ -1190,7 +1190,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const pts = `${minX},${minY} ${maxX},${minY} ${maxX},${maxY} ${minX},${maxY}`;
         state.selectionBox.setAttribute('points', pts);
 
-        createResizeHandles(); 
+        createResizeHandles();
         updateHandlesWorld(null, { x: minX, y: minY, width: width, height: height });
     }
 
@@ -1219,7 +1219,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function updateHandlesWorld(wrapper, overrideRect = null) {
         if (!state.resizeHandles || !state.resizeHandles.length) return;
-        
+
         let tl, tr, bl, br;
 
         if (overrideRect) {
@@ -1296,14 +1296,14 @@ document.addEventListener('DOMContentLoaded', () => {
         undoManager.recordState();
         e.stopPropagation();
         e.preventDefault();
-        
+
         if (state.selectedElements.length === 0) return;
 
         state.selectedElement = state.selectedElements.length === 1 ? state.selectedElements[0] : state.selectedElements[state.selectedElements.length - 1];
 
         state.isResizing = true;
         state.resizeHandleIndex = handleIndex;
-        
+
         let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
         state.selectedElements.forEach(el => {
             const bbox = el.getBBox();
@@ -1319,7 +1319,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 maxY = Math.max(maxY, p.y);
             });
         });
-        
+
         const startBox = { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
 
         let anchorX, anchorY;
@@ -1329,7 +1329,7 @@ document.addEventListener('DOMContentLoaded', () => {
             case 2: anchorX = maxX; anchorY = minY; break;
             case 3: anchorX = minX; anchorY = minY; break;
         }
-        
+
         const overlayPt = overlaySVG.createSVGPoint();
         overlayPt.x = anchorX; overlayPt.y = anchorY;
         const screenPt = overlayPt.matrixTransform(overlaySVG.getScreenCTM());
@@ -1355,17 +1355,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const pt = getSVGPoint(editorSVG, e.clientX, e.clientY);
         const ctx = state.resizeContext;
-        
+
         const mouseDx = pt.x - ctx.startPoint.x;
         const mouseDy = pt.y - ctx.startPoint.y;
 
         let diffX = mouseDx;
         let diffY = mouseDy;
-        
+
         if (state.resizeHandleIndex === 0 || state.resizeHandleIndex === 2) diffX = -mouseDx;
         if (state.resizeHandleIndex === 0 || state.resizeHandleIndex === 1) diffY = -mouseDy;
 
-        const finalW = Math.max(1, ctx.startW + diffX); 
+        const finalW = Math.max(1, ctx.startW + diffX);
         const finalH = Math.max(1, ctx.startH + diffY);
 
         const scaleX = finalW / ctx.startW;
@@ -1397,7 +1397,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         window.removeEventListener('mousemove', onResizing);
         window.removeEventListener('mouseup', stopResizing);
-        
+
         updateSelectionOverlay();
     }
 
@@ -1536,8 +1536,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const guidesV = state.smartGuides.guides.v || [];
         const guidesH = state.smartGuides.guides.h || [];
-        
-        const base = state.dragContext.base || { sx: 1, sy: 1 }; 
+
+        const base = state.dragContext.base || { sx: 1, sy: 1 };
         const sx = Math.abs(base.sx || 1);
         const sy = Math.abs(base.sy || 1);
 
@@ -1802,7 +1802,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (isCtrl) {
             if (e.key === 'c' && state.selectedElements.length > 0) {
                 e.preventDefault();
-                copyElement(state.selectedElements[0]); 
+                copyElement(state.selectedElements[0]);
                 return;
             }
             if (e.key === 'x' && state.selectedElements.length > 0) {
@@ -1947,7 +1947,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (state.currentTool === 'select') {
             const rawTarget = e.target.closest ? e.target.closest('path, rect, circle, ellipse, line, text, g') : null;
-            
+
             if (rawTarget && editorSVG.contains(rawTarget)) {
                 undoManager.recordState();
                 const wrapper = rawTarget.closest && rawTarget.closest('g[data-resize-wrapper="1"]');
@@ -2360,6 +2360,10 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const clone = editorSVG.cloneNode(true);
 
+            if (state.baseViewBox) {
+                const { x, y, w, h } = state.baseViewBox;
+                clone.setAttribute('viewBox', `${x} ${y} ${w} ${h}`);
+            }
             clone.querySelectorAll('g[data-resize-wrapper="1"]').forEach(g => {
                 const parent = g.parentNode;
                 while (g.firstChild) parent.insertBefore(g.firstChild, g);
