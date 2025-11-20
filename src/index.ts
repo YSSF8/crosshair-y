@@ -270,6 +270,22 @@ function getSelectedCrosshairFilename() {
     return (customCrosshair && customCrosshairsDir) ? customCrosshair : cfg.crosshair;
 }
 
+ipcMain.on('get-themes', async (event) => {
+    const themesDir = path.join(app.getAppPath(), 'public', 'style', 'themes');
+    try {
+        await fs.access(themesDir);
+        const files = await fs.readdir(themesDir);
+        const cssThemes = files
+            .filter(file => file.endsWith('.css'))
+            .map(file => file.replace('.css', ''));
+        
+        event.reply('themes-list', cssThemes);
+    } catch (err) {
+        console.error('Error loading themes:', err);
+        event.reply('themes-list', []);
+    }
+});
+
 ipcMain.on('change-custom-crosshair', (event, name) => {
     customCrosshair = name;
 

@@ -29,18 +29,40 @@ const sortSelect = document.getElementById('sort-select');
 const refreshDir = document.querySelector('.refresh-dir');
 const openDir = document.querySelector('.open-dir');
 
+// --- THEME LOGIC START ---
 function applyTheme(themeName) {
-    const classesToRemove = [...document.documentElement.classList].filter(c => c.endsWith('-theme'));
-    document.documentElement.classList.remove(...classesToRemove);
+    const linkId = 'custom-theme-link';
+    let linkEl = document.getElementById(linkId);
+    const root = document.documentElement;
 
-    if (themeName && themeName !== 'dark') {
-        document.documentElement.classList.add(`${themeName}-theme`);
+    // 1. Reset built-in classes
+    root.classList.remove('light-theme');
+
+    // 2. Apply logic
+    if (themeName === 'light') {
+        // Built-in Light
+        root.classList.add('light-theme');
+        if (linkEl) linkEl.remove();
+    } else if (themeName === 'dark') {
+        // Built-in Dark
+        if (linkEl) linkEl.remove();
+    } else {
+        // Custom Theme
+        if (!linkEl) {
+            linkEl = document.createElement('link');
+            linkEl.id = linkId;
+            linkEl.rel = 'stylesheet';
+            document.head.appendChild(linkEl);
+        }
+        linkEl.href = `./style/themes/${themeName}.css`;
     }
 }
 
+// Initialize & Migrate
 let storedTheme = localStorage.getItem('app-theme');
 
 if (!storedTheme) {
+    // Migration: Check for legacy boolean
     const oldLightMode = localStorage.getItem('light-theme');
     if (oldLightMode === 'true') {
         storedTheme = 'light';

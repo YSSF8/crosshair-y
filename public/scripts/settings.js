@@ -26,16 +26,12 @@ function applyReducedMotion(state) {
 }
 
 document.addEventListener('keydown', (e) => {
-    // F3 or Ctrl+F to focus search input
     if (e.key === 'F3' || (e.ctrlKey && e.key === 'f')) {
         e.preventDefault();
-
-        // Check if settings iframe is open
         const frame = document.querySelector('.full-frame');
         if (frame) {
             const frameDoc = frame.contentDocument || frame.contentWindow.document;
             const searchInput = frameDoc.querySelector('#search-input');
-
             if (searchInput) {
                 searchInput.focus();
                 searchInput.select();
@@ -55,28 +51,6 @@ settings.addEventListener('click', () => {
         const frameBody = frameDoc.body;
         const htmlElement = frameBody.parentElement;
 
-        const applyTheme = (themeName) => {
-            const removeThemeClasses = (element) => {
-                const classes = [...element.classList].filter(c => c.endsWith('-theme'));
-                element.classList.remove(...classes);
-            };
-
-            removeThemeClasses(htmlElement);
-            removeThemeClasses(document.documentElement);
-
-            if (themeName && themeName !== 'dark') {
-                const className = `${themeName}-theme`;
-                htmlElement.classList.add(className);
-                document.documentElement.classList.add(className);
-            }
-        };
-
-        let navigationSections = {};
-
-        frameBody.querySelectorAll('.group-title').forEach(title => {
-            navigationSections[title.id] = title.textContent;
-        });
-
         const navigationWrapper = frameBody.querySelector('.navigation-wrapper');
         const navigationTabs = frameBody.querySelector('.navigation-tabs');
         const navigationInput = frameBody.querySelector('.navigation-input');
@@ -84,6 +58,111 @@ settings.addEventListener('click', () => {
         const itemsFound = frameBody.querySelector('.items-found');
         const navButtons = frameBody.querySelector('.navigation-buttons');
         const crosshairGroupTitle = frameBody.querySelector('.group-title#crosshair');
+        
+        const resetButton = frameBody.querySelector('.reset');
+        const closeButton = frameBody.querySelector('.close');
+        const sizeRange = frameBody.querySelector('#size-range');
+        const hueRange = frameBody.querySelector('#hue-range');
+        const rotateRange = frameBody.querySelector('#rotate-range');
+        const opacityRange = frameBody.querySelector('#opacity-range');
+        const fixedPositionToggle = frameBody.querySelector('#fixed-position-toggle');
+        const xPositionInput = frameBody.querySelector('#x-position-input');
+        const yPositionInput = frameBody.querySelector('#y-position-input');
+        const saveMousePositionButton = frameBody.querySelector('#save-mouse-position');
+        const loadPresetSelect = frameBody.querySelector('#load-preset');
+        const savePresetButton = frameBody.querySelector('#save-preset');
+        const deletePresetBtn = frameBody.querySelector('#delete-preset');
+        const deleteAllPresetsBtn = frameBody.querySelector('#delete-all-preset');
+        const exportPresets = frameBody.querySelector('#export-presets');
+        const importPresets = frameBody.querySelector('#import-presets');
+        const setDirectory = frameBody.querySelector('#set-directory');
+        const setDirectorySubText = setDirectory.querySelector('.sub-label');
+        const removeDir = frameBody.querySelector('#remove-directory');
+        
+        const themeSelect = frameBody.querySelector('#theme-select');
+        
+        const reducedMotionSelect = frameBody.querySelector('#reduced-motion-select');
+        const about = frameBody.querySelector('#about');
+        const checkForUpdates = frameBody.querySelector('#check-for-updates');
+        const autoUpdater = frameBody.querySelector('#auto-updates-toggle');
+
+        const applyTheme = (themeName) => {
+            const linkId = 'custom-theme-link';
+
+            const targets = [
+                { doc: document, root: document.documentElement },
+                { doc: frameDoc, root: htmlElement }
+            ];
+
+            targets.forEach(({ doc, root }) => {
+                let linkEl = doc.getElementById(linkId);
+
+                root.classList.remove('light-theme');
+
+                if (themeName === 'light') {
+                    root.classList.add('light-theme');
+                    if (linkEl) linkEl.remove();
+                } else if (themeName === 'dark') {
+                    if (linkEl) linkEl.remove();
+                } else {
+                    if (!linkEl) {
+                        linkEl = doc.createElement('link');
+                        linkEl.id = linkId;
+                        linkEl.rel = 'stylesheet';
+                        doc.head.appendChild(linkEl);
+                    }
+                    linkEl.href = `./style/themes/${themeName}.css`;
+                }
+            });
+        };
+
+        ipcRenderer.send('get-themes');
+
+        ipcRenderer.once('themes-list', (event, customThemes) => {
+            themeSelect.innerHTML = `
+                <option value="dark">Dark</option>
+                <option value="light">Light</option>
+            `;
+
+            customThemes.forEach(theme => {
+                const opt = document.createElement('option');
+                opt.value = theme;
+                opt.textContent = theme.charAt(0).toUpperCase() + theme.slice(1);
+                themeSelect.appendChild(opt);
+            });
+
+            themeSelect._parseOptions?.();
+
+            let storedTheme = localStorage.getItem('app-theme');
+
+            if (!storedTheme) {
+                const oldLightMode = localStorage.getItem('light-theme');
+                if (oldLightMode === 'true') {
+                    storedTheme = 'light';
+                    localStorage.removeItem('light-theme');
+                    localStorage.setItem('app-theme', 'light');
+                } else {
+                    storedTheme = 'dark';
+                }
+            }
+
+            themeSelect.value = storedTheme;
+            applyTheme(storedTheme);
+        });
+
+        themeSelect.addEventListener('change', () => {
+            const val = themeSelect.value;
+            localStorage.setItem('app-theme', val);
+            localStorage.removeItem('light-theme');
+            applyTheme(val);
+        });
+
+
+        let navigationSections = {};
+
+        frameBody.querySelectorAll('.group-title').forEach(title => {
+            navigationSections[title.id] = title.textContent;
+        });
 
         let searchHits = [];
         let currentIndex = -1;
@@ -143,7 +222,6 @@ settings.addEventListener('click', () => {
         });
 
         const NAV_HEIGHT = navigationWrapper.offsetHeight + 8;
-
         crosshairGroupTitle.style.marginTop = `${NAV_HEIGHT}px`;
 
         Object.keys(navigationSections).forEach(section => {
@@ -179,50 +257,7 @@ settings.addEventListener('click', () => {
                 searchInput.select();
             }
         });
-
-        const resetButton = frameBody.querySelector('.reset');
-        const closeButton = frameBody.querySelector('.close');
-        const sizeRange = frameBody.querySelector('#size-range');
-        const hueRange = frameBody.querySelector('#hue-range');
-        const rotateRange = frameBody.querySelector('#rotate-range');
-        const opacityRange = frameBody.querySelector('#opacity-range');
-        const fixedPositionToggle = frameBody.querySelector('#fixed-position-toggle');
-        const xPositionInput = frameBody.querySelector('#x-position-input');
-        const yPositionInput = frameBody.querySelector('#y-position-input');
-        const saveMousePositionButton = frameBody.querySelector('#save-mouse-position');
-        const loadPresetSelect = frameBody.querySelector('#load-preset');
-        const savePresetButton = frameBody.querySelector('#save-preset');
-        const deletePresetBtn = frameBody.querySelector('#delete-preset');
-        const deleteAllPresetsBtn = frameBody.querySelector('#delete-all-preset');
-        const exportPresets = frameBody.querySelector('#export-presets');
-        const importPresets = frameBody.querySelector('#import-presets');
-        const setDirectory = frameBody.querySelector('#set-directory');
-        const setDirectorySubText = setDirectory.querySelector('.sub-label');
-        const removeDir = frameBody.querySelector('#remove-directory');
-
-        const themeSelect = frameBody.querySelector('#theme-select');
-
-        const reducedMotionSelect = frameBody.querySelector('#reduced-motion-select');
-        const about = frameBody.querySelector('#about');
-        const checkForUpdates = frameBody.querySelector('#check-for-updates');
-        const autoUpdater = frameBody.querySelector('#auto-updates-toggle');
-
-        let storedTheme = localStorage.getItem('app-theme');
-
-        if (!storedTheme) {
-            const oldLightMode = localStorage.getItem('light-theme');
-            if (oldLightMode === 'true') {
-                storedTheme = 'light';
-                localStorage.removeItem('light-theme');
-                localStorage.setItem('app-theme', 'light');
-            } else {
-                storedTheme = 'dark';
-            }
-        }
-
-        themeSelect.value = storedTheme;
-        applyTheme(storedTheme);
-
+        
         reducedMotionSelect.value = localStorage.getItem('reduced-motion') || 'system';
         applyReducedMotion(reducedMotionSelect.value);
 
@@ -715,13 +750,6 @@ settings.addEventListener('click', () => {
                 console.warn("'openDir' element not found.");
             }
             ipcRenderer.send('onload-crosshair-directory', null);
-        });
-
-        themeSelect.addEventListener('change', () => {
-            const val = themeSelect.value;
-            localStorage.setItem('app-theme', val);
-            localStorage.removeItem('light-theme');
-            applyTheme(val);
         });
 
         reducedMotionSelect.addEventListener('change', () => {
