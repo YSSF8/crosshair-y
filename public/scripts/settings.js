@@ -12,7 +12,19 @@ function debounce(func, wait) {
     };
 }
 
-// Add global keyboard shortcuts for search
+function applyReducedMotion(state) {
+    const html = document.documentElement;
+    html.classList.remove('reduced-motion');
+
+    if (state === 'on') {
+        html.classList.add('reduced-motion');
+    } else if (state === 'system') {
+        if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+            html.classList.add('reduced-motion');
+        }
+    }
+}
+
 document.addEventListener('keydown', (e) => {
     // F3 or Ctrl+F to focus search input
     if (e.key === 'F3' || (e.ctrlKey && e.key === 'f')) {
@@ -42,6 +54,22 @@ settings.addEventListener('click', () => {
         const frameDoc = frame.contentDocument || frame.contentWindow.document;
         const frameBody = frameDoc.body;
         const htmlElement = frameBody.parentElement;
+
+        const applyTheme = (themeName) => {
+            const removeThemeClasses = (element) => {
+                const classes = [...element.classList].filter(c => c.endsWith('-theme'));
+                element.classList.remove(...classes);
+            };
+
+            removeThemeClasses(htmlElement);
+            removeThemeClasses(document.documentElement);
+
+            if (themeName && themeName !== 'dark') {
+                const className = `${themeName}-theme`;
+                htmlElement.classList.add(className);
+                document.documentElement.classList.add(className);
+            }
+        };
 
         let navigationSections = {};
 
@@ -144,19 +172,13 @@ settings.addEventListener('click', () => {
             navigationInput.classList.remove('search-active');
         });
 
-        // Add keyboard shortcut listener for the iframe document as well
         frameDoc.addEventListener('keydown', (e) => {
-            // F3 or Ctrl+F to focus search input
             if (e.key === 'F3' || (e.ctrlKey && e.key === 'f')) {
                 e.preventDefault();
                 searchInput.focus();
                 searchInput.select();
             }
         });
-
-        if (localStorage.getItem('light-theme')) {
-            htmlElement.classList.add('light-theme');
-        }
 
         const resetButton = frameBody.querySelector('.reset');
         const closeButton = frameBody.querySelector('.close');
@@ -177,19 +199,29 @@ settings.addEventListener('click', () => {
         const setDirectory = frameBody.querySelector('#set-directory');
         const setDirectorySubText = setDirectory.querySelector('.sub-label');
         const removeDir = frameBody.querySelector('#remove-directory');
-        const themeToggle = frameBody.querySelector('#theme-toggle');
+
+        const themeSelect = frameBody.querySelector('#theme-select');
+
         const reducedMotionSelect = frameBody.querySelector('#reduced-motion-select');
         const about = frameBody.querySelector('#about');
         const checkForUpdates = frameBody.querySelector('#check-for-updates');
         const autoUpdater = frameBody.querySelector('#auto-updates-toggle');
 
-        if (localStorage.getItem('light-theme') === 'true') {
-            htmlElement.classList.add('light-theme');
-            document.documentElement.classList.add('light-theme');
-            themeToggle.checked = false;
-        } else {
-            themeToggle.checked = true;
+        let storedTheme = localStorage.getItem('app-theme');
+
+        if (!storedTheme) {
+            const oldLightMode = localStorage.getItem('light-theme');
+            if (oldLightMode === 'true') {
+                storedTheme = 'light';
+                localStorage.removeItem('light-theme');
+                localStorage.setItem('app-theme', 'light');
+            } else {
+                storedTheme = 'dark';
+            }
         }
+
+        themeSelect.value = storedTheme;
+        applyTheme(storedTheme);
 
         reducedMotionSelect.value = localStorage.getItem('reduced-motion') || 'system';
         applyReducedMotion(reducedMotionSelect.value);
@@ -239,12 +271,10 @@ settings.addEventListener('click', () => {
                 if (typeof openDir !== 'undefined') { openDir.title = 'No directory'; openDir.classList.add('disabled'); }
                 ipcRenderer.send('onload-crosshair-directory', null);
 
-                if (localStorage.getItem('light-theme') === 'true') {
-                    document.documentElement.classList.remove('light-theme');
-                    htmlElement.classList.remove('light-theme');
-                    localStorage.removeItem('light-theme');
-                }
-                themeToggle.checked = true;
+                localStorage.removeItem('app-theme');
+                localStorage.removeItem('light-theme');
+                themeSelect.value = 'dark';
+                applyTheme('dark');
 
                 localStorage.removeItem('reduced-motion');
                 reducedMotionSelect.value = 'system';
@@ -687,22 +717,11 @@ settings.addEventListener('click', () => {
             ipcRenderer.send('onload-crosshair-directory', null);
         });
 
-        if (localStorage.getItem('light-theme')) {
-            themeToggle.removeAttribute('checked');
-        } else {
-            themeToggle.setAttribute('checked', '');
-        }
-
-        themeToggle.addEventListener('change', () => {
-            if (!themeToggle.checked) {
-                document.documentElement.classList.add('light-theme');
-                htmlElement.classList.add('light-theme');
-                localStorage.setItem('light-theme', 'true');
-            } else {
-                document.documentElement.classList.remove('light-theme');
-                htmlElement.classList.remove('light-theme');
-                localStorage.removeItem('light-theme');
-            }
+        themeSelect.addEventListener('change', () => {
+            const val = themeSelect.value;
+            localStorage.setItem('app-theme', val);
+            localStorage.removeItem('light-theme');
+            applyTheme(val);
         });
 
         reducedMotionSelect.addEventListener('change', () => {

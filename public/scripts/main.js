@@ -29,9 +29,29 @@ const sortSelect = document.getElementById('sort-select');
 const refreshDir = document.querySelector('.refresh-dir');
 const openDir = document.querySelector('.open-dir');
 
-if (localStorage.getItem('light-theme')) {
-    document.documentElement.classList.add('light-theme');
+function applyTheme(themeName) {
+    const classesToRemove = [...document.documentElement.classList].filter(c => c.endsWith('-theme'));
+    document.documentElement.classList.remove(...classesToRemove);
+
+    if (themeName && themeName !== 'dark') {
+        document.documentElement.classList.add(`${themeName}-theme`);
+    }
 }
+
+let storedTheme = localStorage.getItem('app-theme');
+
+if (!storedTheme) {
+    const oldLightMode = localStorage.getItem('light-theme');
+    if (oldLightMode === 'true') {
+        storedTheme = 'light';
+        localStorage.removeItem('light-theme');
+        localStorage.setItem('app-theme', 'light');
+    } else {
+        storedTheme = 'dark';
+    }
+}
+
+applyTheme(storedTheme);
 
 ipcRenderer.once('built-in-crosshairs-response', (event, crosshairs) => {
     const crosshairsToElements = crosshairs.reverse().map(crosshair => `
