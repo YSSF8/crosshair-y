@@ -154,9 +154,6 @@ function applyPresetFromTray(presetConfig: Config) {
         customCrosshair = null;
     }
 
-    const selectedCrosshair = getSelectedCrosshairPath();
-    crosshair.setImage(selectedCrosshair || '');
-
     crosshair.size = +config.size;
     crosshair.hue = +config.hue;
     crosshair.rotation = +config.rotation;
@@ -164,6 +161,14 @@ function applyPresetFromTray(presetConfig: Config) {
     crosshair.fixedPosition = config.fixedPosition || false;
     crosshair.xPosition = config.xPosition || 0;
     crosshair.yPosition = config.yPosition || 0;
+
+    const selectedCrosshair = getSelectedCrosshairPath();
+    crosshair.close();
+    
+    if (selectedCrosshair) {
+        crosshair.open(selectedCrosshair);
+        crosshair.show();
+    }
 
     crosshair.applySize();
     crosshair.applyHue();
