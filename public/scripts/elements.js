@@ -15,8 +15,8 @@ class CustomToggle extends HTMLElement {
                 height: 40px;
                 border: none;
                 border-radius: 20px;
-                background: var(--primary-opposite);
-                color: #5a5a5a;
+                background: var(--primary-opposite); 
+                color: var(--primary-color); 
                 font-size: 14px;
                 font-weight: 500;
                 cursor: pointer;
@@ -28,7 +28,7 @@ class CustomToggle extends HTMLElement {
 
             button[aria-checked="true"] {
                 background: var(--accent-primary);
-                color: white;
+                color: #fff;
                 box-shadow: 0 3px 6px rgba(0,87,183,0.2);
             }
 
@@ -157,7 +157,7 @@ class CustomRange extends HTMLElement {
                 left: 0;
                 width: 16px;
                 height: 16px;
-                background: #ffffff;
+                background: var(--text); 
                 border: 2px solid var(--accent-primary);
                 border-radius: 50%;
                 transform: translate(-50%, -50%);
@@ -352,20 +352,22 @@ class CustomCheck extends HTMLElement {
                 height: 20px;
                 border: none;
                 border-radius: 5px;
-                background: var(--primary-opposite);
-                color: #5a5a5a;
+                background: var(--secondary-color);
+                color: var(--text); 
                 cursor: pointer;
                 transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
                 box-shadow: 0 2px 4px rgba(0,0,0,0.1);
                 display: flex;
                 align-items: center;
                 justify-content: center;
+                border: 1px solid var(--line-color);
             }
 
             button[aria-checked="true"] {
                 background: var(--accent-primary);
                 color: white;
                 box-shadow: 0 3px 6px rgba(0,87,183,0.2);
+                border-color: var(--accent-primary);
             }
 
             svg {
@@ -490,9 +492,10 @@ class CustomSelect extends HTMLElement {
         style.textContent = `
             :host {
                 --radius: 8px;
-                --bg: var(--primary-color, #181818);
-                --border: 1px solid #ccc;
+                --bg: var(--secondary-color); 
+                --border: 1px solid var(--line-color);
                 --accent: var(--accent-primary, #0057b7);
+                --text-color: var(--text);
                 --shadow: 0 4px 12px rgba(0,0,0,.15);
                 display: inline-block;
                 position: relative;
@@ -507,7 +510,7 @@ class CustomSelect extends HTMLElement {
                 border: var(--border);
                 border-radius: var(--radius);
                 background: var(--bg);
-                color: var(--text);
+                color: var(--text-color);
                 cursor: pointer;
                 display: flex;
                 align-items: center;
@@ -546,6 +549,7 @@ class CustomSelect extends HTMLElement {
                 border: var(--border);
                 border-radius: var(--radius);
                 box-shadow: var(--shadow);
+                color: var(--text-color);
                 z-index: 9999;
                 max-height: 200px;
                 overflow-y: auto;
@@ -570,16 +574,16 @@ class CustomSelect extends HTMLElement {
                 color: #fff;
             }
             .option:hover:not([selected]) {
-                background: rgba(0,0,0,.05);
+                background: var(--tertiary-color);
             }
 
             ::-webkit-scrollbar {
-                width: var(--default-px);
-                height: var(--default-px);
+                width: var(--default-px, 8px);
+                height: var(--default-px, 8px);
             }
             ::-webkit-scrollbar-thumb {
                 background-color: var(--scroll-bar-normal);
-                border-radius: var(--default-px);
+                border-radius: var(--default-px, 8px);
             }
             ::-webkit-scrollbar-thumb:hover {
                 background-color: var(--scroll-bar-hover);
@@ -832,8 +836,9 @@ class MultiButtons extends HTMLElement {
         style.textContent = `
             :host {
                 --radius: 8px;
-                --bg: var(--primary-color, #181818);
-                --border: 1px solid #ccc;
+                --bg: var(--secondary-color);
+                --border: 1px solid var(--line-color);
+                --text-color: var(--text);
                 --accent: var(--accent-primary, #0057b7);
                 --shadow: 0 4px 12px rgba(0,0,0,.15);
                 display: inline-block;
@@ -847,7 +852,7 @@ class MultiButtons extends HTMLElement {
                 border: var(--border);
                 border-radius: var(--radius);
                 background: var(--bg);
-                color: var(--text);
+                color: var(--text-color);
                 cursor: pointer;
                 display: flex;
                 align-items: center;
@@ -901,10 +906,10 @@ class MultiButtons extends HTMLElement {
                 white-space: nowrap;
                 box-sizing: border-box;
                 width: 100%;
-                color: var(--text);
+                color: var(--text-color);
             }
             .option:hover {
-                background: var(--accent);
+                background: var(--tertiary-color);
             }
         `;
 
