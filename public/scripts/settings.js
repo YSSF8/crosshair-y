@@ -58,7 +58,7 @@ settings.addEventListener('click', () => {
         const itemsFound = frameBody.querySelector('.items-found');
         const navButtons = frameBody.querySelector('.navigation-buttons');
         const crosshairGroupTitle = frameBody.querySelector('.group-title#crosshair');
-        
+
         const resetButton = frameBody.querySelector('.reset');
         const closeButton = frameBody.querySelector('.close');
         const sizeRange = frameBody.querySelector('#size-range');
@@ -78,9 +78,9 @@ settings.addEventListener('click', () => {
         const setDirectory = frameBody.querySelector('#set-directory');
         const setDirectorySubText = setDirectory.querySelector('.sub-label');
         const removeDir = frameBody.querySelector('#remove-directory');
-        
+
         const themeSelect = frameBody.querySelector('#theme-select');
-        
+
         const reducedMotionSelect = frameBody.querySelector('#reduced-motion-select');
         const about = frameBody.querySelector('#about');
         const checkForUpdates = frameBody.querySelector('#check-for-updates');
@@ -257,7 +257,7 @@ settings.addEventListener('click', () => {
                 searchInput.select();
             }
         });
-        
+
         reducedMotionSelect.value = localStorage.getItem('reduced-motion') || 'system';
         applyReducedMotion(reducedMotionSelect.value);
 

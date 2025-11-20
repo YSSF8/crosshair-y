@@ -29,25 +29,19 @@ const sortSelect = document.getElementById('sort-select');
 const refreshDir = document.querySelector('.refresh-dir');
 const openDir = document.querySelector('.open-dir');
 
-// --- THEME LOGIC START ---
 function applyTheme(themeName) {
     const linkId = 'custom-theme-link';
     let linkEl = document.getElementById(linkId);
     const root = document.documentElement;
 
-    // 1. Reset built-in classes
     root.classList.remove('light-theme');
 
-    // 2. Apply logic
     if (themeName === 'light') {
-        // Built-in Light
         root.classList.add('light-theme');
         if (linkEl) linkEl.remove();
     } else if (themeName === 'dark') {
-        // Built-in Dark
         if (linkEl) linkEl.remove();
     } else {
-        // Custom Theme
         if (!linkEl) {
             linkEl = document.createElement('link');
             linkEl.id = linkId;
@@ -58,11 +52,9 @@ function applyTheme(themeName) {
     }
 }
 
-// Initialize & Migrate
 let storedTheme = localStorage.getItem('app-theme');
 
 if (!storedTheme) {
-    // Migration: Check for legacy boolean
     const oldLightMode = localStorage.getItem('light-theme');
     if (oldLightMode === 'true') {
         storedTheme = 'light';
