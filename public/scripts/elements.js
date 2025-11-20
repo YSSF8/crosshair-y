@@ -572,6 +572,21 @@ class CustomSelect extends HTMLElement {
             .option:hover:not([selected]) {
                 background: rgba(0,0,0,.05);
             }
+
+            ::-webkit-scrollbar {
+                width: var(--default-px);
+                height: var(--default-px);
+            }
+            ::-webkit-scrollbar-thumb {
+                background-color: var(--scroll-bar-normal);
+                border-radius: var(--default-px);
+            }
+            ::-webkit-scrollbar-thumb:hover {
+                background-color: var(--scroll-bar-hover);
+            }
+            ::-webkit-scrollbar-thumb:active {
+                background-color: var(--scroll-bar-active);
+            }
         `;
 
         this._trigger = document.createElement('button');
