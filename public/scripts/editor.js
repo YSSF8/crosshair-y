@@ -2,9 +2,43 @@ const { ipcRenderer } = require('electron');
 const fs = require('fs');
 
 document.addEventListener('DOMContentLoaded', () => {
-    if (localStorage.getItem('light-theme')) {
-        document.documentElement.classList.add('light-theme');
+    const applyTheme = (themeName) => {
+        const linkId = 'custom-theme-link';
+        let linkEl = document.getElementById(linkId);
+        const root = document.documentElement;
+
+        root.classList.remove('light-theme');
+
+        if (themeName === 'light') {
+            root.classList.add('light-theme');
+            if (linkEl) linkEl.remove();
+        } else if (themeName === 'dark') {
+            if (linkEl) linkEl.remove();
+        } else {
+            if (!linkEl) {
+                linkEl = document.createElement('link');
+                linkEl.id = linkId;
+                linkEl.rel = 'stylesheet';
+                document.head.appendChild(linkEl);
+            }
+            linkEl.href = `./style/themes/${themeName}.css`;
+        }
+    };
+
+    let storedTheme = localStorage.getItem('app-theme');
+
+    if (!storedTheme) {
+        const oldLightMode = localStorage.getItem('light-theme');
+        if (oldLightMode === 'true') {
+            storedTheme = 'light';
+            localStorage.removeItem('light-theme');
+            localStorage.setItem('app-theme', 'light');
+        } else {
+            storedTheme = 'dark';
+        }
     }
+
+    applyTheme(storedTheme);
 
     const canvasContainer = document.getElementById('canvas-container');
     const canvasWrapper = document.getElementById('canvas-wrapper');
