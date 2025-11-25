@@ -124,6 +124,9 @@ class ValorantCrosshair {
             svgContent += `<g id="${layer.id}">${groupContent}</g>`;
         });
 
-        return `<svg viewBox="0 0 ${size} ${size}" xmlns="http://www.w3.org/2000/svg" shape-rendering="crisp-edges">${svgContent}</svg>`;
+        return `<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+        <svg id="editor-svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" version="1.1" xmlns="http://www.w3.org/2000/svg" shape-rendering="crisp-edges">
+            ${svgContent}
+        </svg>`;
     }
 }
