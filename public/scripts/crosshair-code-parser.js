@@ -102,7 +102,7 @@ class ValorantCrosshair {
         const cx = size / 2;
         const cy = size / 2;
 
-        const scaleFactor = 4;
+        const scaleFactor = 12;
 
         const layers = [
             { id: 'outer', config: settings.outer, type: 'lines' },
