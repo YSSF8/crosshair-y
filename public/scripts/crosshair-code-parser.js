@@ -6,6 +6,11 @@ class ValorantCrosshair {
         };
     }
 
+    /**
+     * Parses a Valorant profile code into a settings object.
+     * @param {string} code - The profile code string.
+     * @returns {object} - The parsed settings.
+     */
     parse(code) {
         const s = {
             color: '#FFFFFF',
@@ -54,6 +59,9 @@ class ValorantCrosshair {
         return s;
     }
 
+    /**
+     * Internal helper to calculate rectangle coordinates.
+     */
     _getLayerRects(cx, cy, type, config, global, scale) {
         let rects = [];
 
@@ -83,11 +91,17 @@ class ValorantCrosshair {
         return rects;
     }
 
+    /**
+     * Generates an SVG string based on the profile code.
+     * @param {string} code - The Valorant profile code.
+     * @param {number} size - Width/Height of the SVG viewbox (default 300).
+     * @returns {string} - The complete SVG HTML string.
+     */
     generate(code, size = 300) {
         const settings = this.parse(code);
         const cx = size / 2;
         const cy = size / 2;
-        
+
         const scaleFactor = 4;
 
         const layers = [
