@@ -76,6 +76,8 @@ settings.addEventListener('click', () => {
         const exportPresets = frameBody.querySelector('#export-presets');
         const importPresets = frameBody.querySelector('#import-presets');
         const setDirectory = frameBody.querySelector('#set-directory');
+        const crosshairCodeInput = frameBody.querySelector('#crosshair-code-input');
+        const saveCrosshairCodeBtn = frameBody.querySelector('#save-crosshair-code');
         const setDirectorySubText = setDirectory.querySelector('.sub-label');
         const removeDir = frameBody.querySelector('#remove-directory');
 
@@ -737,6 +739,7 @@ settings.addEventListener('click', () => {
                 }
 
                 ipcRenderer.send('onload-crosshair-directory', localStorage.getItem('crosshairs-directory') || null);
+                setTimeout(updateCrosshairSaveState, 100);
             });
         });
 
@@ -750,6 +753,99 @@ settings.addEventListener('click', () => {
                 console.warn("'openDir' element not found.");
             }
             ipcRenderer.send('onload-crosshair-directory', null);
+            setTimeout(updateCrosshairSaveState, 100);
+        });
+
+        const updateCrosshairSaveState = () => {
+            const dir = localStorage.getItem('crosshairs-directory');
+            const hasDir = dir && dir.trim() !== '';
+
+            if (hasDir) {
+                saveCrosshairCodeBtn.classList.remove('disabled');
+                saveCrosshairCodeBtn.style.opacity = '1';
+                saveCrosshairCodeBtn.style.pointerEvents = 'all';
+                crosshairCodeInput.disabled = false;
+            } else {
+                saveCrosshairCodeBtn.classList.add('disabled');
+                saveCrosshairCodeBtn.style.opacity = '0.5';
+                saveCrosshairCodeBtn.style.pointerEvents = 'none';
+                crosshairCodeInput.disabled = true;
+            }
+        };
+
+        saveCrosshairCodeBtn.addEventListener('click', () => {
+            const code = crosshairCodeInput.value.trim();
+            if (!code) {
+                messageFromUI('Please enter a crosshair code first.');
+                return;
+            }
+
+            new Modal([
+                {
+                    element: 'div',
+                    extraClass: 'modal-wrapper',
+                    children: [
+                        { element: 'div', text: 'Name your crosshair' },
+                        {
+                            element: 'input',
+                            extraClass: 'modal-input',
+                            attributes: { placeholder: 'TenZ-AimBot' }
+                        },
+                        {
+                            element: 'div',
+                            extraClass: 'modal-wrapper-buttons',
+                            children: [
+                                {
+                                    element: 'button',
+                                    text: 'Save',
+                                    event: 'click',
+                                    eventAction: (e) => {
+                                        const input = e.target.closest('.modal-foreground').querySelector('.modal-input');
+                                        const name = input.value.trim();
+                                        if (!name) return;
+
+                                        try {
+                                            const generator = new ValorantCrosshair();
+                                            const svgString = generator.generate(code);
+
+                                            ipcRenderer.send('save-generated-crosshair', {
+                                                name: name,
+                                                svg: svgString
+                                            });
+
+                                            crosshairCodeInput.value = '';
+                                            e.target.closest('.modal-background').remove();
+                                        } catch (err) {
+                                            console.error(err);
+                                            messageFromUI('Invalid Crosshair Code');
+                                        }
+                                    }
+                                },
+                                {
+                                    element: 'button',
+                                    text: 'Cancel',
+                                    event: 'click',
+                                    eventAction: (e) => e.target.closest('.modal-background').remove()
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ]);
+
+            setTimeout(() => {
+                const modalInput = document.querySelector('.modal-input');
+                if (modalInput) modalInput.focus();
+            }, 50);
+        });
+
+        updateCrosshairSaveState();
+
+        ipcRenderer.removeAllListeners('save-generated-crosshair-success');
+
+        ipcRenderer.on('save-generated-crosshair-success', () => {
+            messageFromUI('Crosshair saved successfully!');
+            ipcRenderer.send('refresh-crosshairs');
         });
 
         reducedMotionSelect.addEventListener('change', () => {

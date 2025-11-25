@@ -422,6 +422,32 @@ ipcMain.on('refresh-crosshairs', async (event) => {
     }
 });
 
+ipcMain.on('save-generated-crosshair', async (event, { name, svg }) => {
+    if (!customCrosshairsDir) {
+        event.reply('error', 'No custom directory set');
+        return;
+    }
+
+    try {
+        const fileName = name.endsWith('.svg') ? name : `${name}.svg`;
+        const filePath = path.join(customCrosshairsDir, fileName);
+
+        await fs.writeFile(filePath, svg, 'utf-8');
+        
+        event.reply('save-generated-crosshair-success');
+        
+        if (customCrosshairsDir) {
+             const files = await fs.readdir(customCrosshairsDir);
+             const validFiles = files.filter((file) => path.extname(file) === '.png' || path.extname(file) === '.svg');
+             window.webContents.send('custom-crosshairs-response', validFiles);
+        }
+
+    } catch (err) {
+        console.error('Failed to save SVG crosshair:', err);
+        event.reply('error', 'Failed to save crosshair');
+    }
+});
+
 ipcMain.on('export-presets', async (event, presets) => {
     const result = await dialog.showSaveDialog({
         title: 'Export Presets',

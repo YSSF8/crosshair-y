@@ -82,4 +82,48 @@ class ValorantCrosshair {
         }
         return rects;
     }
+
+    generate(code, size = 300) {
+        const settings = this.parse(code);
+        const cx = size / 2;
+        const cy = size / 2;
+        
+        const scaleFactor = 4;
+
+        const layers = [
+            { id: 'outer', config: settings.outer, type: 'lines' },
+            { id: 'inner', config: settings.inner, type: 'lines' },
+            { id: 'dot', config: null, type: 'dot' }
+        ];
+
+        let svgContent = '';
+
+        layers.forEach(layer => {
+            const rects = this._getLayerRects(cx, cy, layer.type, layer.config, settings, scaleFactor);
+            if (rects.length === 0) return;
+
+            let groupContent = '';
+
+            if (settings.outlines) {
+                const ot = settings.outlineThickness * scaleFactor;
+                const outlineOpacity = settings.outlineOpacity;
+
+                rects.forEach(r => {
+                    groupContent += `<rect x="${r.x - ot}" y="${r.y - ot}" width="${r.w + (ot * 2)}" height="${r.h + (ot * 2)}" fill="black" fill-opacity="${outlineOpacity}" />`;
+                });
+            }
+
+            const opacity = layer.type === 'dot' ? settings.centerDotOpacity : layer.config.opacity;
+
+            if (opacity > 0) {
+                rects.forEach(r => {
+                    groupContent += `<rect x="${r.x}" y="${r.y}" width="${r.w}" height="${r.h}" fill="${settings.color}" fill-opacity="${opacity}" />`;
+                });
+            }
+
+            svgContent += `<g id="${layer.id}">${groupContent}</g>`;
+        });
+
+        return `<svg viewBox="0 0 ${size} ${size}" xmlns="http://www.w3.org/2000/svg" shape-rendering="crisp-edges">${svgContent}</svg>`;
+    }
 }
