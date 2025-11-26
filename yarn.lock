@@ -372,9 +372,9 @@ electron-packager@^17.1.2:
     yargs-parser "^21.1.1"
 
 electron@^37.2.5:
-  version "37.2.5"
-  resolved "https://registry.yarnpkg.com/electron/-/electron-37.2.5.tgz#29ce0154f763c03d70645063344da51af40c751c"
-  integrity sha512-719ZqEp43rj6xDJMICm4CIXl8keFFgvVNO9Ix6OtjNjrh9HtYlP/1WiYeRohnXj06aLyGx5NCzrHbG7j3BxO9w==
+  version "37.10.2"
+  resolved "https://registry.yarnpkg.com/electron/-/electron-37.10.2.tgz#f10ec7f7d777db8aaa7b05bf82d378677f180fa1"
+  integrity sha512-7TOA9WVO8jFKvkWMJPkSmQxV68TJEPa8bh4AYykKYuUcsezxsbZUpEH8MgEHH/orJhpbaO77XIC/+40lMkTlEg==
   dependencies:
     "@electron/get" "^2.0.0"
     "@types/node" "^22.7.7"
