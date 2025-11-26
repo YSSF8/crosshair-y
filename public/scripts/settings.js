@@ -486,23 +486,13 @@ settings.addEventListener('click', () => {
             rotateRange.title = rotateRange.value;
             opacityRange.title = parseFloat(opacityRange.value).toFixed(1);
 
-            ipcRenderer.send('config', config);
-            ipcRenderer.send('change-size', config.size);
-            ipcRenderer.send('change-hue', config.hue);
-            ipcRenderer.send('change-rotation', config.rotation);
-            ipcRenderer.send('change-opacity', config.opacity);
+            ipcRenderer.send('apply-preset', config);
 
-            if (config.crosshair) {
-                if (config.crosshair.startsWith(localStorage.getItem('crosshairs-directory') || '')) {
-                    ipcRenderer.send('change-custom-crosshair', config.crosshair);
-                    localStorage.setItem('custom-crosshair', config.crosshair);
-                } else {
-                    ipcRenderer.send('change-crosshair', config.crosshair);
-                    localStorage.removeItem('custom-crosshair');
-                }
+            if (config.crosshair && localStorage.getItem('crosshairs-directory')) {
+                localStorage.setItem('custom-crosshair', config.crosshair);
+            } else {
+                localStorage.removeItem('custom-crosshair');
             }
-
-            refreshOverlay();
         });
 
         savePresetButton.addEventListener('click', () => {

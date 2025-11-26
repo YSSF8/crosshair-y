@@ -303,6 +303,10 @@ ipcMain.on('change-custom-crosshair', (event, name) => {
     crosshair.applyOpacity();
 });
 
+ipcMain.on('apply-preset', (event, presetConfig: Config) => {
+    applyPresetFromTray(presetConfig);
+});
+
 ipcMain.on('config', (event, newConfig: Config) => {
     config = newConfig;
 
