@@ -104,6 +104,12 @@ toggleCrosshair.addEventListener('change', () => {
     }
 });
 
+document.querySelector('.header-option.toggle').addEventListener('click', (e) => {
+    if (e.target.tagName !== 'LABEL') {
+        toggleCrosshair.toggle();
+    }
+});
+
 ipcRenderer.send('change-hue', config.hue);
 ipcRenderer.send('change-rotation', config.rotation);
 
