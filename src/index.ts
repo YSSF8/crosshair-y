@@ -7,7 +7,8 @@ import {
     Tray,
     Menu,
     nativeImage,
-    MenuItemConstructorOptions
+    MenuItemConstructorOptions,
+    screen
 } from 'electron';
 import fs from 'fs/promises';
 import _fs from 'fs';
@@ -18,13 +19,18 @@ import childProcess from 'child_process';
 import CrosshairOverlay = require('./crosshair');
 import createEditorWindow from './editor';
 import { arch, platform } from 'os';
-import { screen } from 'electron';
+
+const ONE_PIXEL_TRANSPARENT = nativeImage.createFromBuffer(
+    Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=', 'base64')
+);
 
 let lastPosition: { x: number | undefined, y: number | undefined } = { x: undefined, y: undefined };
 let window: BrowserWindow;
-let tray: Tray;
+let tray: Tray | null = null;
 const crosshair = new CrosshairOverlay();
 const CROSSHAIRS_DIR = path.join(app.getAppPath(), 'public', 'crosshairs');
+
+let isQuitting = false;
 
 app.on('ready', () => {
     window = new BrowserWindow({
@@ -44,24 +50,26 @@ app.on('ready', () => {
     window.setMenu(null);
     window.loadFile(path.join(app.getAppPath(), 'public', 'index.html'));
 
-    const iconPath = path.join(__dirname, '..', '/icon.png');
-    const trayIcon = nativeImage.createFromPath(iconPath).resize({ width: 16 });
-    tray = new Tray(trayIcon);
-
-    tray.setToolTip('Crosshair Y');
-
-    buildTrayMenu();
-
-    tray.on('click', () => showMainWindow());
-
     window.on('hide', () => {
         const [x, y] = window.getPosition();
         lastPosition = { x, y };
     });
 
     window.on('close', (e) => {
-        e.preventDefault();
-        window.hide();
+        if (tray && !tray.isDestroyed()) {
+            e.preventDefault();
+            window.hide();
+        }
+    });
+
+    window.on('closed', () => {
+        try {
+            if (crosshair) crosshair.close();
+        } catch (err) {
+            console.error("Error closing crosshair:", err);
+        }
+        
+        app.quit();
     });
 
     try {
@@ -71,16 +79,100 @@ app.on('ready', () => {
                 window.webContents.send('mouse-position', { x, y });
             }
         });
-        console.log('Global shortcut registered successfully: CommandOrControl+Shift+S');
     } catch (error) {
-        console.error('Failed to register global shortcut: CommandOrControl+Shift+S', error);
+        console.error('Failed to register global shortcut', error);
     }
 
     showMainWindow();
 });
 
-app.on('will-quit', () => {
+app.on('will-quit', async (e) => {
+    if (isQuitting) return;
+
+    if (!tray || tray.isDestroyed()) {
+        globalShortcut.unregisterAll();
+        return; 
+    }
+
+    e.preventDefault();
+    isQuitting = true;
+
     globalShortcut.unregisterAll();
+
+    await removeTray();
+
+    app.quit();
+});
+
+function createTray() {
+    if (tray) {
+        try {
+            if(!tray.isDestroyed()) tray.destroy();
+        } catch(e) { console.error(e); }
+        tray = null;
+    }
+
+    try {
+        const iconPath = path.join(__dirname, '..', '/icon.png');
+        const trayIcon = nativeImage.createFromPath(iconPath).resize({ width: 16 });
+
+        tray = new Tray(trayIcon);
+        tray.setToolTip('Crosshair Y');
+        tray.on('click', () => showMainWindow());
+        
+        buildTrayMenu();
+    } catch (error) {
+        console.error("Failed to create tray:", error);
+        tray = null;
+    }
+}
+
+async function removeTray(): Promise<void> {
+    if (!tray) return;
+
+    const trayToDestroy = tray;
+    tray = null; 
+
+    if (trayToDestroy.isDestroyed()) return;
+
+    if (platform() === 'linux') {
+        try {
+            trayToDestroy.setImage(ONE_PIXEL_TRANSPARENT);
+            trayToDestroy.setToolTip('');
+            trayToDestroy.setContextMenu(Menu.buildFromTemplate([]));
+        } catch (err) {
+            console.error('Tray update error:', err);
+        }
+
+        return new Promise((resolve) => {
+            setTimeout(() => {
+                try {
+                    if (!trayToDestroy.isDestroyed()) {
+                        trayToDestroy.destroy();
+                    }
+                } catch (e) {
+                    console.error('Tray destroy error:', e);
+                }
+                resolve();
+            }, 300);
+        });
+    } else {
+        try {
+            trayToDestroy.destroy();
+        } catch (e) {
+            console.error('Tray destroy error:', e);
+        }
+        return Promise.resolve();
+    }
+}
+
+ipcMain.on('toggle-tray', (event, shouldShow) => {
+    const show = shouldShow === true || shouldShow === 'true';
+    if (show) {
+        createTray();
+    } else {
+        removeTray();
+    }
 });
 
 let currentPresets: Record<string, Config> = {};
@@ -91,7 +183,7 @@ ipcMain.on('update-tray-presets', (event, presets) => {
 });
 
 function buildTrayMenu() {
-    if (!tray) return;
+    if (!tray || tray.isDestroyed()) return;
 
     const presetKeys = Object.keys(currentPresets);
     const hasPresets = presetKeys.length > 0;
@@ -131,7 +223,10 @@ function buildTrayMenu() {
             label: 'Quit',
             click: () => {
                 window.removeAllListeners('close');
-                crosshair.close();
+                try {
+                    crosshair.close();
+                } catch(e) {}
+                
                 app.quit();
             }
         }
@@ -164,7 +259,7 @@ function applyPresetFromTray(presetConfig: Config) {
 
     const selectedCrosshair = getSelectedCrosshairPath();
     crosshair.close();
-    
+
     if (selectedCrosshair) {
         crosshair.open(selectedCrosshair);
         crosshair.show();
@@ -278,7 +373,7 @@ ipcMain.on('get-themes', async (event) => {
         const cssThemes = files
             .filter(file => file.endsWith('.css'))
             .map(file => file.replace('.css', ''));
-        
+
         event.reply('themes-list', cssThemes);
     } catch (err) {
         console.error('Error loading themes:', err);
@@ -437,13 +532,13 @@ ipcMain.on('save-generated-crosshair', async (event, { name, svg }) => {
         const filePath = path.join(customCrosshairsDir, fileName);
 
         await fs.writeFile(filePath, svg, 'utf-8');
-        
+
         event.reply('save-generated-crosshair-success');
-        
+
         if (customCrosshairsDir) {
-             const files = await fs.readdir(customCrosshairsDir);
-             const validFiles = files.filter((file) => path.extname(file) === '.png' || path.extname(file) === '.svg');
-             window.webContents.send('custom-crosshairs-response', validFiles);
+            const files = await fs.readdir(customCrosshairsDir);
+            const validFiles = files.filter((file) => path.extname(file) === '.png' || path.extname(file) === '.svg');
+            window.webContents.send('custom-crosshairs-response', validFiles);
         }
 
     } catch (err) {

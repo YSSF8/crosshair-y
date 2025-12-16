@@ -1,5 +1,9 @@
 const { ipcRenderer } = require('electron');
 
+const storedTrayState = localStorage.getItem('system-tray');
+const shouldShowTray = storedTrayState === null ? true : storedTrayState === 'true';
+ipcRenderer.send('toggle-tray', shouldShowTray);
+
 ipcRenderer.send('built-in-crosshairs');
 
 const DEFAULT_CONFIG = {

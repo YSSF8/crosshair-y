@@ -87,6 +87,16 @@ settings.addEventListener('click', () => {
         const about = frameBody.querySelector('#about');
         const checkForUpdates = frameBody.querySelector('#check-for-updates');
         const autoUpdater = frameBody.querySelector('#auto-updates-toggle');
+        const systemTrayToggle = frameBody.querySelector('#system-tray-toggle');
+
+        window.addEventListener('load', () => {
+            ipcRenderer.send('toggle-tray', false);
+
+            setTimeout(() => {
+                const isEnabled = systemTrayToggle.checked;
+                ipcRenderer.send('toggle-tray', isEnabled);
+            }, 100);
+        });
 
         const applyTheme = (themeName) => {
             const linkId = 'custom-theme-link';
@@ -108,10 +118,10 @@ settings.addEventListener('click', () => {
                     if (linkEl) linkEl.remove();
                 } else {
                     if (!linkEl) {
-                        linkEl = doc.createElement('link');
+                        linkEl = document.createElement('link');
                         linkEl.id = linkId;
                         linkEl.rel = 'stylesheet';
-                        doc.head.appendChild(linkEl);
+                        document.head.appendChild(linkEl);
                     }
                     linkEl.href = `./style/themes/${themeName}.css`;
                 }
@@ -265,6 +275,15 @@ settings.addEventListener('click', () => {
 
         autoUpdater.checked = localStorage.getItem('auto-updates') === 'true';
 
+        const storedTrayState = localStorage.getItem('system-tray');
+        systemTrayToggle.checked = storedTrayState === null ? true : storedTrayState === 'true';
+
+        systemTrayToggle.addEventListener('change', () => {
+            const isEnabled = systemTrayToggle.checked;
+            localStorage.setItem('system-tray', isEnabled);
+            ipcRenderer.send('toggle-tray', isEnabled);
+        });
+
         const INPUT_DEBOUNCE_DELAY = 50;
 
         const debouncedSendSize = debounce(value => {
@@ -321,6 +340,10 @@ settings.addEventListener('click', () => {
                     localStorage.removeItem('auto-updates');
                 }
                 autoUpdater.checked = false;
+
+                localStorage.removeItem('system-tray');
+                systemTrayToggle.checked = true;
+                ipcRenderer.send('toggle-tray', true);
 
                 refreshOverlay();
             });
