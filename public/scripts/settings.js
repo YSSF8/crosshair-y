@@ -1,5 +1,11 @@
 const settings = document.querySelector('.settings');
 
+document.addEventListener('DOMContentLoaded', () => {
+    const storedTrayState = localStorage.getItem('system-tray');
+    const shouldShowTray = storedTrayState === null ? true : storedTrayState === 'true';
+    ipcRenderer.send('toggle-tray', shouldShowTray);
+});
+
 function debounce(func, wait) {
     let timeout;
     return function executedFunction(...args) {
@@ -88,15 +94,6 @@ settings.addEventListener('click', () => {
         const checkForUpdates = frameBody.querySelector('#check-for-updates');
         const autoUpdater = frameBody.querySelector('#auto-updates-toggle');
         const systemTrayToggle = frameBody.querySelector('#system-tray-toggle');
-
-        window.addEventListener('load', () => {
-            ipcRenderer.send('toggle-tray', false);
-
-            setTimeout(() => {
-                const isEnabled = systemTrayToggle.checked;
-                ipcRenderer.send('toggle-tray', isEnabled);
-            }, 100);
-        });
 
         const applyTheme = (themeName) => {
             const linkId = 'custom-theme-link';

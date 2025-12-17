@@ -18,11 +18,7 @@ import axios from 'axios';
 import childProcess from 'child_process';
 import CrosshairOverlay = require('./crosshair');
 import createEditorWindow from './editor';
-import { arch, platform } from 'os';
-
-const ONE_PIXEL_TRANSPARENT = nativeImage.createFromBuffer(
-    Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=', 'base64')
-);
+import { arch, platform, release } from 'os';
 
 let lastPosition: { x: number | undefined, y: number | undefined } = { x: undefined, y: undefined };
 let window: BrowserWindow;
@@ -56,7 +52,7 @@ app.on('ready', () => {
     });
 
     window.on('close', (e) => {
-        if (tray && !tray.isDestroyed()) {
+        if (!isQuitting && tray && !tray.isDestroyed()) {
             e.preventDefault();
             window.hide();
         }
@@ -68,7 +64,8 @@ app.on('ready', () => {
         } catch (err) {
             console.error("Error closing crosshair:", err);
         }
-        
+
+        window = null as any;
         app.quit();
     });
 
@@ -86,31 +83,22 @@ app.on('ready', () => {
     showMainWindow();
 });
 
-app.on('will-quit', async (e) => {
-    if (isQuitting) return;
-
-    if (!tray || tray.isDestroyed()) {
-        globalShortcut.unregisterAll();
-        return; 
-    }
-
-    e.preventDefault();
+app.on('before-quit', () => {
     isQuitting = true;
+});
 
+app.on('will-quit', () => {
     globalShortcut.unregisterAll();
 
-    await removeTray();
-
-    app.quit();
+    try {
+        if (crosshair) crosshair.close();
+    } catch (e) {
+        console.error('Error closing crosshair on will-quit:', e);
+    }
 });
 
 function createTray() {
-    if (tray) {
-        try {
-            if(!tray.isDestroyed()) tray.destroy();
-        } catch(e) { console.error(e); }
-        tray = null;
-    }
+    if (tray) return;
 
     try {
         const iconPath = path.join(__dirname, '..', '/icon.png');
@@ -119,7 +107,7 @@ function createTray() {
         tray = new Tray(trayIcon);
         tray.setToolTip('Crosshair Y');
         tray.on('click', () => showMainWindow());
-        
+
         buildTrayMenu();
     } catch (error) {
         console.error("Failed to create tray:", error);
@@ -127,43 +115,15 @@ function createTray() {
     }
 }
 
-async function removeTray(): Promise<void> {
+function removeTray() {
     if (!tray) return;
-
-    const trayToDestroy = tray;
-    tray = null; 
-
-    if (trayToDestroy.isDestroyed()) return;
-
-    if (platform() === 'linux') {
-        try {
-            trayToDestroy.setImage(ONE_PIXEL_TRANSPARENT);
-            trayToDestroy.setToolTip('');
-            trayToDestroy.setContextMenu(Menu.buildFromTemplate([]));
-        } catch (err) {
-            console.error('Tray update error:', err);
-        }
-
-        return new Promise((resolve) => {
-            setTimeout(() => {
-                try {
-                    if (!trayToDestroy.isDestroyed()) {
-                        trayToDestroy.destroy();
-                    }
-                } catch (e) {
-                    console.error('Tray destroy error:', e);
-                }
-                resolve();
-            }, 300);
-        });
-    } else {
-        try {
-            trayToDestroy.destroy();
-        } catch (e) {
-            console.error('Tray destroy error:', e);
-        }
-        return Promise.resolve();
+    
+    try {
+        tray.destroy();
+    } catch (e) {
+        console.error(e);
     }
+    tray = null;
 }
 
 ipcMain.on('toggle-tray', (event, shouldShow) => {
@@ -222,11 +182,14 @@ function buildTrayMenu() {
         {
             label: 'Quit',
             click: () => {
-                window.removeAllListeners('close');
+                isQuitting = true;
+
                 try {
                     crosshair.close();
-                } catch(e) {}
-                
+                } catch (e) { 
+                    console.error('Error closing crosshair on quit:', e);
+                }
+
                 app.quit();
             }
         }
