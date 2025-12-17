@@ -1,11 +1,5 @@
 const settings = document.querySelector('.settings');
 
-document.addEventListener('DOMContentLoaded', () => {
-    const storedTrayState = localStorage.getItem('system-tray');
-    const shouldShowTray = storedTrayState === null ? true : storedTrayState === 'true';
-    ipcRenderer.send('toggle-tray', shouldShowTray);
-});
-
 function debounce(func, wait) {
     let timeout;
     return function executedFunction(...args) {
@@ -277,8 +271,44 @@ settings.addEventListener('click', () => {
 
         systemTrayToggle.addEventListener('change', () => {
             const isEnabled = systemTrayToggle.checked;
-            localStorage.setItem('system-tray', isEnabled);
-            ipcRenderer.send('toggle-tray', isEnabled);
+
+            new Modal([
+                {
+                    element: 'div',
+                    extraClass: 'modal-wrapper',
+                    children: [
+                        {
+                            element: 'div',
+                            text: 'Changing the system tray setting requires the app to restart to take effect.',
+                            extraClass: 'modal-message'
+                        },
+                        {
+                            element: 'div',
+                            extraClass: 'modal-wrapper-buttons',
+                            children: [
+                                {
+                                    element: 'button',
+                                    text: 'Restart Now',
+                                    event: 'click',
+                                    eventAction: () => {
+                                        localStorage.setItem('system-tray', isEnabled);
+                                        ipcRenderer.send('restart-app');
+                                    }
+                                },
+                                {
+                                    element: 'button',
+                                    text: 'Later',
+                                    event: 'click',
+                                    eventAction: (ev) => {
+                                        localStorage.setItem('system-tray', isEnabled);
+                                        ev.target.closest('.modal-background').remove();
+                                    }
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ]);
         });
 
         const INPUT_DEBOUNCE_DELAY = 50;

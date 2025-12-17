@@ -97,6 +97,11 @@ app.on('will-quit', () => {
     }
 });
 
+ipcMain.on('restart-app', () => {
+    app.relaunch();
+    app.exit(0);
+});
+
 function createTray() {
     if (tray) return;
 

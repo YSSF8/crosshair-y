@@ -1,8 +1,11 @@
 const { ipcRenderer } = require('electron');
 
-const storedTrayState = localStorage.getItem('system-tray');
-const shouldShowTray = storedTrayState === null ? true : storedTrayState === 'true';
-ipcRenderer.send('toggle-tray', shouldShowTray);
+document.addEventListener('DOMContentLoaded', () => {
+    const storedTrayState = localStorage.getItem('system-tray');
+    const shouldShow = storedTrayState === null ? true : storedTrayState === 'true';
+
+    ipcRenderer.send('toggle-tray', shouldShow);
+});
 
 ipcRenderer.send('built-in-crosshairs');
 
