@@ -47,6 +47,20 @@ cd crosshair-y
 npm install
 ```
 
+### Install TypeScript
+
+```bash
+npm install --save-dev typescript
+# Or
+yarn add --dev typescript
+```
+
+### Compiling TypeScript
+
+```bash
+npx tsc
+```
+
 ### Running the Application
 
 ```bash
