@@ -89,8 +89,6 @@ settings.addEventListener('click', () => {
         const autoUpdater = frameBody.querySelector('#auto-updates-toggle');
         const systemTrayToggle = frameBody.querySelector('#system-tray-toggle');
 
-        // settings.js
-
         const applyTheme = (themeName) => {
             const linkId = 'custom-theme-link';
 
