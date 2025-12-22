@@ -89,6 +89,8 @@ settings.addEventListener('click', () => {
         const autoUpdater = frameBody.querySelector('#auto-updates-toggle');
         const systemTrayToggle = frameBody.querySelector('#system-tray-toggle');
 
+        // settings.js
+
         const applyTheme = (themeName) => {
             const linkId = 'custom-theme-link';
 
@@ -109,10 +111,11 @@ settings.addEventListener('click', () => {
                     if (linkEl) linkEl.remove();
                 } else {
                     if (!linkEl) {
-                        linkEl = document.createElement('link');
+                        linkEl = doc.createElement('link');
                         linkEl.id = linkId;
                         linkEl.rel = 'stylesheet';
-                        document.head.appendChild(linkEl);
+
+                        doc.head.appendChild(linkEl);
                     }
                     linkEl.href = `./style/themes/${themeName}.css`;
                 }
