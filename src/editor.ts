@@ -9,8 +9,9 @@ function createEditorWindow(filePath: string) {
         width: 800,
         height: 600,
         webPreferences: {
-            nodeIntegration: true,
-            contextIsolation: false,
+            nodeIntegration: false,
+            contextIsolation: true,
+            preload: path.join(__dirname, 'preload.js')
         },
     });
     (editorWindow as any)._filePath = filePath ?? null;
@@ -21,7 +22,12 @@ function createEditorWindow(filePath: string) {
     editorWindow.loadFile('public/editor.html');
     editorWindow.webContents.on('did-finish-load', () => {
         if (filePath) {
-            editorWindow.webContents.send('load-file', filePath);
+            try {
+                const content = fs.readFileSync(filePath, 'utf-8');
+                editorWindow.webContents.send('load-file', { filePath, content });
+            } catch (err) {
+                console.error('Failed to read file in main process:', err);
+            }
         }
     });
 

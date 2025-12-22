@@ -1,4 +1,5 @@
 import { app, BrowserWindow, screen, ipcMain } from 'electron';
+import path from 'path';
 
 class CrosshairOverlay {
     public window: BrowserWindow | null = null;
@@ -29,14 +30,13 @@ class CrosshairOverlay {
                 hasShadow: false,
                 show: false,
                 webPreferences: {
-                    nodeIntegration: true,
-                    contextIsolation: false
+                    nodeIntegration: false,
+                    contextIsolation: true,
+                    preload: path.join(__dirname, 'preload.js')
                 },
             });
 
             this.window.loadFile('./public/crosshair.html');
-
-            const { width, height } = screen.getPrimaryDisplay().size;
 
             this.setBounds();
 

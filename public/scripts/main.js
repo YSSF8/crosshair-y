@@ -1,5 +1,3 @@
-const { ipcRenderer } = require('electron');
-
 document.addEventListener('DOMContentLoaded', () => {
     const storedTrayState = localStorage.getItem('system-tray');
     const shouldShow = storedTrayState === null ? true : storedTrayState === 'true';
@@ -75,30 +73,42 @@ if (!storedTheme) {
 applyTheme(storedTheme);
 
 ipcRenderer.once('built-in-crosshairs-response', (event, crosshairs) => {
-    const crosshairsToElements = crosshairs.reverse().map(crosshair => `
-    <div class="crosshair">
-        <img src="./crosshairs/${crosshair}" draggable="false" alt="">
-        <div>${crosshair.split('.')[0]}</div>
-    </div>`);
-    const joinedElements = crosshairsToElements.join('');
-    builtInSection.innerHTML = joinedElements;
+    builtInSection.innerHTML = '';
+    const fragment = document.createDocumentFragment();
 
-    builtInSection.querySelectorAll('.crosshair').forEach(crosshair => {
-        crosshair.addEventListener('click', () => {
-            const name = crosshair.querySelector('div').textContent + '.png';
+    crosshairs.reverse().forEach(crosshair => {
+        const div = document.createElement('div');
+        div.className = 'crosshair';
+
+        const img = document.createElement('img');
+        img.src = `./crosshairs/${crosshair}`;
+        img.draggable = false;
+        img.alt = crosshair;
+
+        const textDiv = document.createElement('div');
+        textDiv.textContent = crosshair.split('.')[0];
+
+        div.appendChild(img);
+        div.appendChild(textDiv);
+
+        div.addEventListener('click', () => {
+            const name = crosshair;
 
             localStorage.removeItem('custom-crosshair');
-
             ipcRenderer.send('change-crosshair', name);
-            refreshOverlay();
 
             config.crosshair = name;
             localStorage.setItem('config', JSON.stringify(config));
 
             ipcRenderer.send('change-hue', config.hue);
             ipcRenderer.send('change-rotation', config.rotation);
+            if (typeof refreshOverlay === 'function') refreshOverlay();
         });
+
+        fragment.appendChild(div);
     });
+
+    builtInSection.appendChild(fragment);
 });
 
 ipcRenderer.send('show-crosshair');
@@ -178,15 +188,31 @@ function renderCustomSection(listToRender) {
     if (!dir) return;
 
     customSection.innerHTML = '';
+
+    const fragment = document.createDocumentFragment();
+
     listToRender.forEach(fileName => {
         const nameOnly = fileName.split('.').slice(0, -1).join('.');
+
         const div = document.createElement('div');
         div.className = 'crosshair' + (favorites.includes(fileName) ? ' favorite-crosshair' : '');
         div.dataset.file = fileName;
-        div.innerHTML = `
-            <img src="${dir}/${fileName}" height="40" width="40" draggable="false" alt="">
-            <div>${nameOnly}</div>`;
-        customSection.appendChild(div);
+
+        const img = document.createElement('img');
+        img.src = `${dir}/${fileName}`;
+        img.height = 40;
+        img.width = 40;
+        img.draggable = false;
+        img.alt = nameOnly;
+
+        img.loading = "lazy";
+
+        const textDiv = document.createElement('div');
+        textDiv.textContent = nameOnly;
+
+        div.appendChild(img);
+        div.appendChild(textDiv);
+        fragment.appendChild(div);
 
         const isFavorite = favorites.includes(fileName);
         const favoriteLabel = isFavorite ? 'Remove from favorites' : 'Add to favorites';
@@ -239,18 +265,18 @@ function renderCustomSection(listToRender) {
                 ]);
                 document.body.lastElementChild.__modal = document.body.lastElementChild;
             }
-        }
+        };
 
         if (fileName.toLowerCase().endsWith('.svg')) {
             menuItems['Editor'] = () => {
-                console.log('Opening SVG editor for:', fileName);
                 ipcRenderer.send('open-svg-editor', `${dir}/${fileName}`);
-                console.log('SVG editor opened for:', fileName);
             }
         }
 
         new ContextMenu(div, menuItems);
     });
+
+    customSection.appendChild(fragment);
 
     attachClickHandlers();
 }

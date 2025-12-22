@@ -1,6 +1,3 @@
-const { ipcRenderer } = require('electron');
-const fs = require('fs');
-
 document.addEventListener('DOMContentLoaded', () => {
     const applyTheme = (themeName) => {
         const linkId = 'custom-theme-link';
@@ -779,7 +776,7 @@ document.addEventListener('DOMContentLoaded', () => {
         setupToolbox();
         setupCanvasListeners();
         setupPropertiesPanel();
-        ipcRenderer.on('load-file', (event, filePath) => loadSVG(filePath));
+        ipcRenderer.on('load-file', (event, data) => loadSVG(data));
         setBaseViewBoxFromEditor();
         setupZoomControls();
         setupSmartGuidesUI();
@@ -789,10 +786,45 @@ document.addEventListener('DOMContentLoaded', () => {
         undoManager.recordState();
     }
 
-    function loadSVG(filePath) {
+    function sanitizeSVG(svgString) {
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(svgString, 'image/svg+xml');
+
+        const parserError = doc.querySelector('parsererror');
+        if (parserError) {
+            console.error('SVG Parse Error', parserError);
+            return svgString;
+        }
+
+        const scripts = doc.querySelectorAll('script');
+        scripts.forEach(node => node.remove());
+
+        const allElements = doc.querySelectorAll('*');
+        allElements.forEach(el => {
+            const attrs = Array.from(el.attributes);
+            attrs.forEach(attr => {
+                const name = attr.name.toLowerCase();
+                const value = attr.value.toLowerCase().trim();
+
+                if (name.startsWith('on')) {
+                    el.removeAttribute(attr.name);
+                }
+
+                if ((name === 'href' || name.endsWith(':href')) && value.startsWith('javascript:')) {
+                    el.removeAttribute(attr.name);
+                }
+            });
+        });
+
+        return new XMLSerializer().serializeToString(doc.documentElement);
+    }
+
+    function loadSVG(data) {
         try {
+            const { filePath, content } = data;
             state.filePath = filePath;
-            const svgContent = fs.readFileSync(filePath, 'utf-8');
+
+            const svgContent = sanitizeSVG(content);
 
             canvasWrapper.innerHTML = svgContent + '<svg id="editor-overlay" xmlns="http://www.w3.org/2000/svg"></svg>';
 
